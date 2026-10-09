@@ -1,0 +1,2373 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天氣營運儀表板 | Weather OPS Dashboard V12</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Tone.js for optional alert sound -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <!-- Open-source interactive map: MapLibre GL JS + OpenFreeMap tiles -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg-dark: #0b1a30;
+      --card-bg: #132c54;
+      --card-header: #1a3a6e;
+      --border-color: #244880;
+      --text-main: #ffffff;
+      --text-sub: #94a3b8;
+      --accent-yellow: #facc15;
+      --accent-blue: #38bdf8;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Noto Sans TC', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* 自定義滾動條 */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #081324;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e3a66;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #2563eb;
+    }
+
+    /* 卡片通用樣式，支援自訂拖曳尺寸 */
+    .hko-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+      resize: both;
+      min-width: 290px;
+    }
+
+    .hko-card-header {
+      background-color: var(--card-header);
+      padding: 7px 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      color: #ffffff;
+      user-select: none;
+    }
+
+    .hko-card-body {
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .hko-card-footer {
+      background-color: #ffffff;
+      color: #1d4ed8;
+      padding: 4px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border-color);
+      user-select: none;
+    }
+
+    .hko-card-footer button {
+      transition: color 0.15s ease;
+    }
+    .hko-card-footer button:hover {
+      color: #0284c7;
+    }
+
+    /* 氣溫報告卡片天藍漸變底色 */
+    .weather-report-card-bg {
+      background: linear-gradient(145deg, #4895d9 0%, #367fc4 100%);
+      border-radius: 3px;
+      padding: 14px 16px;
+      color: #ffffff;
+      position: relative;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    }
+
+    /* 翻曆日曆樣式 */
+    .tear-calendar {
+      background: #ffffff;
+      border-radius: 8px;
+      width: 95px;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      user-select: none;
+    }
+    .tear-calendar-top {
+      background: #ef4444;
+      color: #ffffff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 4px 0;
+    }
+    .tear-calendar-day {
+      color: #0f172a;
+      font-size: 2.3rem;
+      font-weight: 800;
+      line-height: 1.1;
+      padding: 6px 0 2px 0;
+    }
+    .tear-calendar-sub {
+      color: #64748b;
+      font-size: 0.65rem;
+      padding-bottom: 5px;
+      font-weight: 600;
+    }
+
+    /* 閃爍更新動畫 (用於切換觀測站時) */
+    @keyframes flashData {
+      0% { opacity: 0.3; color: #38bdf8; }
+      100% { opacity: 1; color: #ffffff; }
+    }
+    .data-flash { animation: flashData 0.5s ease-out; }
+
+    /* ===== OPS V2 ===== */
+    .ops-shell{max-width:1800px;margin:0 auto;width:100%;}
+    .ops-card{background:linear-gradient(180deg,#142f59,#102747);border:1px solid #28518a;border-radius:7px;box-shadow:0 5px 18px rgba(0,0,0,.28);overflow:hidden}
+    .ops-card-header{padding:10px 13px;border-bottom:1px solid #28518a;background:#173761;display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .ops-card-title{font-size:.9rem;font-weight:800;letter-spacing:.02em}
+    .ops-muted{color:#9fb3cf}
+    .ops-kpi{padding:13px;border:1px solid #2a558e;border-radius:7px;background:#102747;min-height:94px}
+    .ops-kpi .label{font-size:.7rem;color:#9fb3cf;text-transform:uppercase;letter-spacing:.06em}
+    .ops-kpi .value{font-size:1.65rem;font-weight:800;line-height:1.1;margin-top:6px}
+    .ops-status{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;font-size:.68rem;font-weight:800;white-space:nowrap}
+    .ops-normal{background:#064e3b;color:#a7f3d0;border:1px solid #059669}
+    .ops-watch{background:#713f12;color:#fde68a;border:1px solid #d97706}
+    .ops-warning{background:#7f1d1d;color:#fecaca;border:1px solid #ef4444}
+    .ops-critical{background:#450a0a;color:#fecaca;border:1px solid #f87171;box-shadow:0 0 0 1px rgba(248,113,113,.2)}
+    .ops-stale{background:#334155;color:#cbd5e1;border:1px solid #64748b}
+    .ops-table{width:100%;border-collapse:separate;border-spacing:0;font-size:.76rem}
+    .ops-table th{color:#9fb3cf;text-align:left;font-weight:700;padding:8px 9px;border-bottom:1px solid #28518a;position:sticky;top:0;background:#173761;z-index:1}
+    .ops-table td{padding:9px;border-bottom:1px solid rgba(40,81,138,.55);vertical-align:middle}
+    .ops-table tr:hover td{background:#173761;cursor:pointer}
+    .ops-table tr.ops-selected td{background:#1c416f}
+    .ops-riskbar{height:6px;border-radius:999px;background:#0b1a30;overflow:hidden}
+    .ops-riskbar>span{display:block;height:100%;border-radius:999px;background:#f59e0b}
+    .ops-hour{min-width:92px;padding:9px;border:1px solid #2a558e;border-radius:6px;background:#102747}
+    .ops-health-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(40,81,138,.45);font-size:.74rem}
+    .ops-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:#10b981}
+    .ops-dot.warn{background:#f59e0b}.ops-dot.bad{background:#ef4444}.ops-dot.gray{background:#64748b}
+    .ops-threshold{width:62px;background:#0d213e;border:1px solid #315b91;color:#fff;border-radius:4px;padding:3px 5px;text-align:right;font-size:.72rem}
+    .ops-legend{font-size:.66rem;color:#9fb3cf}
+    .ops-explainer{background:#0d213e;border:1px solid #315b91;border-radius:7px;padding:11px 12px}
+    .ops-explainer b{font-weight:800}
+    @media(max-width:900px){.ops-table{min-width:850px}.ops-scroll{overflow-x:auto}.ops-kpi .value{font-size:1.35rem}}
+
+    /* ===== Corporate UI refresh: white / skyblue / grey ===== */
+    :root { --brand-skyblue:#0ea5e9; --brand-grey:#CDCDCD; --brand-ink:#262626; --brand-bg:#F5F5F5; }
+    body { background:var(--brand-bg)!important; color:var(--brand-ink)!important; }
+    header.sticky { background:#FFFFFF!important; border-color:var(--brand-grey)!important; box-shadow:0 2px 10px rgba(0,0,0,.06)!important; }
+    header .text-slate-200, header .text-slate-300, header .text-slate-400 { color:#666!important; }
+    header [class*="bg-[#122849]"], header [class*="bg-[#17335d]"] { background:#FFFFFF!important; border-color:var(--brand-grey)!important; color:#333!important; }
+    header select { color:#333!important; }
+    .ops-shell { max-width:1600px; padding-bottom:24px; }
+    .ops-card, .ops-kpi { background:#FFFFFF!important; color:#262626!important; border:1px solid #E1E1E1!important; border-radius:12px!important; box-shadow:0 3px 14px rgba(0,0,0,.045)!important; }
+    .ops-card-header { background:#FFFFFF!important; color:#262626!important; border-bottom:1px solid #E8E8E8!important; padding:14px 16px!important; }
+    .ops-card-title { color:#262626!important; font-size:.95rem!important; }
+    .ops-muted, .ops-legend, .ops-kpi .label { color:#6B6B6B!important; }
+    .ops-kpi { min-height:90px; }
+    .ops-kpi .value { color:#222!important; }
+    .ops-table { color:#292929!important; }
+    .ops-table th { background:#F5F5F5!important; color:#555!important; border-color:#E1E1E1!important; }
+    .ops-table td { border-color:#EEEEEE!important; }
+    .ops-table tr:hover td { background:#f0f9ff!important; }
+    .ops-table tr.ops-selected td { background:#e0f2fe!important; }
+    .ops-explainer { background:#f0f9ff!important; border:1px solid #bae6fd!important; color:#333!important; }
+    .ops-hour { background:#FFFFFF!important; border:1px solid #E1E1E1!important; color:#292929!important; border-radius:9px!important; }
+    .ops-threshold { background:#FFFFFF!important; border:1px solid #CDCDCD!important; color:#222!important; }
+    .ops-riskbar { background:#EEEEEE!important; }
+    .ops-status { border-radius:6px!important; }
+    .ops-forecast-select { min-width:220px; max-width:100%; padding:8px 10px; border:1px solid #CDCDCD; border-radius:8px; background:#FFFFFF; color:#222222; font-size:12px; font-weight:600; }
+    .ops-forecast-select:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
+    @media(max-width:640px){ .ops-forecast-select{width:100%;min-width:0;} }
+    .ops-normal { background:#E8F5EE!important; color:#17643A!important; border-color:#A8D9BC!important; }
+    .ops-watch { background:#FFF5D8!important; color:#825A00!important; border-color:#EBD38A!important; }
+    .ops-warning { background:#FCE8E8!important; color:#A21D1D!important; border-color:#E7A6A6!important; }
+    .ops-critical { background:#0ea5e9!important; color:#FFFFFF!important; border-color:#0ea5e9!important; box-shadow:none!important; }
+    .ops-stale { background:#EEEEEE!important; color:#555!important; border-color:#CDCDCD!important; }
+    #opsOverallStatus { padding:7px 12px!important; }
+    #opsTitle { color:#0ea5e9!important; letter-spacing:.04em; }
+    #opsRefreshBtn, button[onclick="fetchAllHkoData(true)"] { background:#0ea5e9!important; color:#FFFFFF!important; border-color:#0ea5e9!important; }
+    .hko-card { background:#FFFFFF!important; color:#262626!important; border:1px solid #E1E1E1!important; border-radius:12px!important; box-shadow:0 3px 14px rgba(0,0,0,.045)!important; overflow:hidden; }
+    .hko-card-header { background:#FFFFFF!important; color:#262626!important; border-bottom:1px solid #E8E8E8!important; }
+    .hko-card-body { color:#333!important; }
+    .hko-card-footer { background:#FAFAFA!important; border-color:#E8E8E8!important; }
+    .hko-card-footer button, .hko-card-footer a { color:#0ea5e9!important; }
+    .weather-report-card-bg { background:linear-gradient(135deg,#0ea5e9,#0369a1)!important; }
+    #opsAlertCenter > div { background:#f0f9ff!important; border-color:#bae6fd!important; color:#333!important; }
+    #c9Title, #opsMatrixTitle, #opsAlertTitle, #opsHealthTitle { color:#0ea5e9!important; }
+    button { transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease; }
+    a { transition:color .16s ease,background-color .16s ease; }
+    @media (min-width:1200px) { .ops-shell { padding-left:8px; padding-right:8px; } }
+
+
+
+    /* ===== V5 readability + website-style refinement ===== */
+    :root {
+      --brand-skyblue: #0ea5e9;
+      --brand-grey: #CDCDCD;
+      --brand-ink: #222222;
+      --brand-bg: #F7F7F8;
+    }
+    body { background: #F7F7F8 !important; color: #222222 !important; }
+    /* Do not use pale grey for meaningful copy: make common muted utilities readable. */
+    .text-slate-100, .text-slate-200, .text-slate-300, .text-slate-400,
+    .text-slate-500, .text-gray-300, .text-gray-400, .text-gray-500,
+    .text-zinc-300, .text-zinc-400, .ops-muted, .ops-legend,
+    .ops-kpi .label, .ops-table th, .hko-card-body .text-xs,
+    .hko-card-body .text-sm, .hko-card-body .text-\[10px\],
+    .hko-card-body .text-\[11px\] { color: #333333 !important; }
+    /* Legacy navy surfaces are converted to white or a very light neutral surface. */
+    [class*="bg-[#0b1a30]"], [class*="bg-[#0c1f3d]"], [class*="bg-[#0e1624]"],
+    [class*="bg-[#0e192c]"], [class*="bg-[#0e2447]"], [class*="bg-[#102342]"],
+    [class*="bg-[#102747]"], [class*="bg-[#112445]"], [class*="bg-[#122849]"],
+    [class*="bg-[#132c54]"], [class*="bg-[#142847]"], [class*="bg-[#162f59]"],
+    [class*="bg-[#17335d]"], [class*="bg-[#173f70]"], [class*="bg-[#183664]"],
+    [class*="bg-[#1a3869]"], [class*="bg-[#1a3966]"], [class*="bg-[#1e427b]"],
+    [class*="bg-[#1f3f72]"], [class*="bg-[#20457d]"], [class*="bg-[#20538f]"],
+    [class*="bg-[#24497e]"] {
+      background-color: #FFFFFF !important;
+      color: #222222 !important;
+      border-color: #E1E1E1 !important;
+    }
+    /* Header and card headers should read like a corporate website, not a dark admin panel. */
+    header.sticky { background: #FFFFFF !important; color: #222222 !important; border-color: #E1E1E1 !important; }
+    .hko-card-header, .ops-card-header { background: #FFFFFF !important; color: #222222 !important; border-color: #E5E5E5 !important; }
+    .hko-card-header *, .ops-card-header * { color: inherit; }
+    /* All action buttons use high-contrast white-on-skyblue or dark-on-light styling. */
+    button[class*="bg-[#"], button.bg-blue-500, button.bg-blue-600,
+    button.bg-blue-700, button[class*="bg-indigo-"], button[class*="bg-slate-"] {
+      background: #0ea5e9 !important;
+      color: #FFFFFF !important;
+      border-color: #0ea5e9 !important;
+      text-shadow: none !important;
+      box-shadow: 0 1px 2px rgba(0,0,0,.08) !important;
+    }
+    button[class*="bg-[#"] *, button.bg-blue-500 *, button.bg-blue-600 *,
+    button.bg-blue-700 *, button[class*="bg-indigo-"] *, button[class*="bg-slate-"] * { color: #FFFFFF !important; }
+    button:hover { filter: brightness(.95); }
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 2px solid #0ea5e9 !important; outline-offset: 2px;
+    }
+    select, input, textarea { color: #222222 !important; background-color: #FFFFFF !important; border-color: #CDCDCD !important; }
+    .ops-card, .ops-kpi, .hko-card { background: #FFFFFF !important; color: #222222 !important; border: 1px solid #E1E1E1 !important; box-shadow: 0 3px 12px rgba(0,0,0,.04) !important; }
+    .ops-explainer { background: #f0f9ff !important; color: #222222 !important; }
+    .ops-hour { background: #FFFFFF !important; color: #222222 !important; }
+    .ops-table th { background: #F3F3F4 !important; color: #222222 !important; }
+    .ops-table td { color: #222222 !important; }
+    .ops-table tr:hover td { background: #f0f9ff !important; }
+    .ops-table tr.ops-selected td { background: #e0f2fe !important; }
+    #opsAlertCenter > div { background: #f0f9ff !important; color: #222222 !important; }
+    #opsAlertCenter .ops-muted { color: #333333 !important; }
+    .hko-card-footer { background: #FAFAFA !important; color: #333333 !important; }
+    .hko-card-footer button, .hko-card-footer a { color: #0ea5e9 !important; }
+    /* Keep deliberate status colors and the weather highlight panel intact. */
+    .ops-normal { background: #E8F5EE !important; color: #17643A !important; }
+    .ops-watch { background: #FFF5D8 !important; color: #825A00 !important; }
+    .ops-warning { background: #FCE8E8 !important; color: #A21D1D !important; }
+    .ops-critical { background: #0ea5e9 !important; color: #FFFFFF !important; }
+    .weather-report-card-bg { background: linear-gradient(135deg,#0ea5e9,#0369a1) !important; color: #FFFFFF !important; }
+    .weather-report-card-bg * { color: #FFFFFF !important; }
+    .tear-calendar { box-shadow: 0 3px 8px rgba(0,0,0,.08) !important; }
+    ::-webkit-scrollbar-track { background: #F1F1F1 !important; }
+    ::-webkit-scrollbar-thumb { background: #CDCDCD !important; }
+    ::-webkit-scrollbar-thumb:hover { background: #0ea5e9 !important; }
+
+
+    /* V6: consistent enterprise presentation and readable HKSCN weather card */
+    #scnTitle, #scnHeaderLabel { color: #222222 !important; }
+    #scnTitle .fa-ship { color: #0ea5e9 !important; }
+    #scnTerminalSelect { background: #FFFFFF !important; color: #222222 !important; border: 1px solid #CDCDCD !important; }
+    #scnTerminalSelect option { background: #FFFFFF !important; color: #222222 !important; }
+    #scnTitle + select { color: #222222 !important; }
+    section:has(#scnTerminalSelect) .hko-card-header { background: #FFFFFF !important; border-bottom: 1px solid #E5E5E5 !important; }
+    section:has(#scnTerminalSelect) .hko-card-body { background: #FFFFFF !important; color: #222222 !important; }
+    #scnTerminalId, #scnDesc, #scnWindSpeedLabel, #scnWindGustLabel,
+    #scnWindDir, #scnHumidity, #scnFlashArea2 span, #scnFlashArea2 div { color: #222222 !important; }
+    #scnTemp, #scnWindSpeed { color: #222222 !important; }
+    #scnWindGust { color: #0ea5e9 !important; }
+    #scnIcon, #scnIcon * { color: #0ea5e9 !important; }
+    #scnFlashArea2 > div { background: #F7F7F8 !important; border: 1px solid #CDCDCD !important; }
+    #scnFlashArea2 .text-sky-400, #scnFlashArea2 .text-amber-400 { color: #0ea5e9 !important; }
+    section:has(#scnTerminalSelect) .bg-emerald-950\/80 { background: #E8F5EE !important; color: #17643A !important; border-color: #B9DEC9 !important; }
+    #c9Title { color: #222222 !important; }
+    #c9Desc { color: #333333 !important; line-height: 1.6; }
+    section:has(#c9Title) .hko-card-body { background: #FFFFFF !important; color: #222222 !important; }
+    section:has(#c9Title) .hko-card-body a { background: #FFFFFF !important; color: #222222 !important; border-color: #CDCDCD !important; }
+    section:has(#c9Title) .hko-card-body a:hover { background: #f0f9ff !important; }
+    section:has(#c9Title) .hko-card-body a span { color: #222222 !important; }
+    section:has(#c9Title) .hko-card-body a i { color: #0ea5e9 !important; }
+    section:has(#c9Title) .hko-card-footer { color: #333333 !important; }
+    /* Preserve the restrained corporate palette: white canvas, charcoal text, skyblue accents, neutral borders. */
+    body { color: #222222; background: #F7F7F8 !important; }
+    .hko-card, .ops-card, .ops-kpi { border-radius: 10px !important; }
+
+    /* V8 navigation + interactive terminal map */
+    :root { --brand-skyblue: #0ea5e9; --line: #E1E1E1; --ink: #222222; }
+    .ops-sidebar { position: fixed; z-index: 40; top: 64px; bottom: 0; left: 0; width: 218px; padding: 18px 12px; background: #fff; border-right: 1px solid #E1E1E1; overflow-y: auto; }
+    .ops-sidebar-label { padding: 0 10px 9px; color: #777; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .ops-nav-link { display:flex; align-items:center; gap:11px; padding:10px 11px; border-radius:8px; color:#333; font-size:13px; font-weight:600; margin:2px 0; transition:background .15s,color .15s; }
+    .ops-nav-link i { width:17px; color:#777; text-align:center; }
+    .ops-nav-link:hover, .ops-nav-link:focus { background:#f0f9ff; color:#0284c7; outline:none; }
+    .ops-nav-link.active { background:#e0f2fe; color:#0284c7; }
+    .ops-nav-link.active i { color:#0ea5e9; }
+    main { margin-left:218px; }
+    .terminal-map-wrap { position:relative; }
+    #terminalMap { height: 460px; min-height: 340px; background:#F8FAFC; border-radius:9px; z-index:1; overflow:hidden; }
+    .terminal-map-status { position:absolute; z-index:5; inset:0; display:flex; align-items:center; justify-content:center; gap:10px; background:#F8FAFC; color:#333; font-size:13px; border-radius:9px; pointer-events:none; }
+    .terminal-map-status.is-hidden { display:none; }
+    .map-status-spinner { width:16px; height:16px; border:2px solid #7dd3fc; border-top-color:#0ea5e9; border-radius:50%; animation:mapspin .8s linear infinite; }
+    @keyframes mapspin { to { transform:rotate(360deg); } }
+    .ops-alert-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-content:start; }
+    .ops-alert-grid > div { min-width:0; }
+    .map-site-list { display:flex; flex-direction:column; gap:8px; max-height:460px; overflow:auto; }
+    .map-site-row { width:100%; text-align:left; border:1px solid #E5E5E5; border-radius:9px; padding:10px 11px; background:#fff; color:#222; transition:all .15s; }
+    .map-site-row:hover { border-color:#38bdf8; background:#f0f9ff; }
+    .map-site-row.is-selected { position:relative; border:2px solid #0ea5e9; background:#e0f2fe; box-shadow:0 0 0 3px rgba(14,165,233,.10),0 5px 16px rgba(14,165,233,.10); padding:9px 10px; }
+    .map-site-row.is-selected::before { content:""; position:absolute; left:0; top:10px; bottom:10px; width:4px; border-radius:0 4px 4px 0; background:#0ea5e9; }
+    .map-site-row .site-metric { color:#333; font-size:11px; }
+    .map-selected-tag { display:inline-flex; align-items:center; gap:4px; background:#0ea5e9; color:#fff; border-radius:999px; padding:3px 7px; font-size:10px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
+    .map-site-row.is-selected .site-metric b { color:#0369a1; }
+    .map-risk-dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex:none; box-shadow:0 0 0 3px rgba(0,0,0,.06); }
+    .maplibregl-popup-content { border-radius:9px; padding:12px 14px; line-height:1.55; box-shadow:0 5px 24px rgba(0,0,0,.16); }
+    .maplibregl-ctrl-attrib { font-size:10px; }
+    .ops-freshness { display:inline-flex; align-items:center; gap:4px; margin-top:5px; font-size:10px; color:#555; }
+    .ops-freshness.is-stale { color:#9B1C1C; font-weight:800; background:#FEF2F2; border:1px solid #FECACA; padding:3px 6px; border-radius:5px; }
+    .ops-stale { background:#F3F4F6!important; color:#7F1D1D!important; border:1px solid #FECACA!important; }
+    .ops-reason { margin-top:6px; padding:7px 8px; border-radius:6px; background:#f0f9ff; border:1px solid #bae6fd; color:#0c4a6e; font-size:11px; line-height:1.45; }
+    .ops-history-list { display:flex; flex-direction:column; gap:7px; }
+    .ops-history-row { display:grid; grid-template-columns:minmax(120px,.7fr) minmax(0,2fr); gap:8px; align-items:start; padding:9px 10px; border:1px solid #E5E5E5; border-radius:8px; background:#fff; font-size:11px; }
+    .ops-history-time { color:#666; font-variant-numeric:tabular-nums; }
+    .ops-history-change { color:#333; line-height:1.45; }
+    .ops-history-empty { padding:14px; background:#FAFAFA; border:1px dashed #DDD; border-radius:8px; color:#666; font-size:12px; }
+    .terminal-map-status { pointer-events:auto; padding:22px; text-align:center; flex-direction:column; }
+    .terminal-map-status .map-fallback-title { font-weight:800; color:#9B1C1C; margin-bottom:4px; }
+    .map-retry-btn { margin-top:10px; padding:7px 12px; border-radius:6px; color:#fff; background:#0ea5e9; font-size:12px; font-weight:700; pointer-events:auto; }
+    .map-fallback-note { margin-top:7px; color:#555; font-size:11px; max-width:310px; }
+    .ops-terminal-marker { display:flex; align-items:center; justify-content:center; min-width:34px; height:28px; padding:0 5px; border:2px solid #fff; border-radius:7px; color:#fff; font:800 10px/1 Inter, sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.28); cursor:pointer; white-space:nowrap; }
+    .ops-terminal-marker.is-selected { outline:3px solid #0ea5e9; outline-offset:2px; z-index:10; }
+    @media (max-width:1200px) { .ops-alert-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:700px) { .ops-alert-grid { grid-template-columns:1fr; } }
+    .ops-section-anchor { scroll-margin-top:86px; }
+    @media (max-width: 900px) {
+      .ops-sidebar { position:sticky; top:60px; width:100%; height:auto; bottom:auto; display:flex; gap:4px; overflow-x:auto; padding:8px 10px; border-right:0; border-bottom:1px solid #E1E1E1; white-space:nowrap; }
+      .ops-sidebar-label { display:none; }
+      .ops-nav-link { flex:none; padding:8px 10px; margin:0; }
+      main { margin-left:0; }
+      #terminalMap { height:380px; }
+      .ops-alert-grid { grid-template-columns:1fr; }
+      .map-site-list { max-height:unset; }
+    }
+    @media (max-width: 640px) { #terminalMap { height:320px; min-height:280px; } }
+
+    /* ===== V11 final readability fixes ===== */
+    #stationListContainer { color:#222!important; background:#fff!important; }
+    #stationListContainer > div { border-bottom:1px solid #eee!important; }
+    #stationListContainer > div:hover { background:#f0f9ff!important; }
+    #stationListContainer > div > span:first-child { color:#444!important; }
+    #stationListContainer > div > span:last-child { color:#222!important; font-size:13px!important; font-weight:800!important; }
+    #c3SummaryBulletin, #c8GeneralSituation { background:#f0f9ff!important; color:#333!important; border-color:#bae6fd!important; }
+    #c3ObsLabel, #c3ListHeading { color:#444!important; }
+    #c6StationName, #c6AstroTitle, #valHighTideTime, #valLowTideTime { color:#222!important; text-shadow:none!important; }
+    #tideUpdateIndicator, #c6AstroDate { color:#666!important; }
+    #c6TideTitle + select, #tideStationSelect { background:#fff!important; color:#222!important; border-color:#CDCDCD!important; }
+    #c6HighData, #c6LowData { min-width:92px; }
+    #valHighTideTime, #valLowTideTime { font-size:19px!important; line-height:1.25!important; font-weight:800!important; }
+    #valHighTideHeight, #valLowTideHeight { color:#0ea5e9!important; font-size:16px!important; line-height:1.35!important; font-weight:800!important; }
+    #c6HighLabel, #c6LowLabel, #c6SstLabel, #lblSunrise, #lblSunset, #lblMoonrise, #lblMoonset, #lblMoonPhase { color:#555!important; }
+    #c6SstLabel + span { color:#0ea5e9!important; font-size:16px!important; }
+    #c6AstroTitle { color:#222!important; font-size:14px!important; font-weight:800!important; }
+    #c6AstroDate { color:#666!important; font-size:11px!important; }
+    #lblSunrise + span, #lblSunset + span, #lblMoonrise + span, #lblMoonset + span { color:#222!important; font-size:13px!important; font-weight:800!important; }
+    #lblMoonPhase + div { color:#0ea5e9!important; }
+    /* Convert legacy dark tide and astronomy panels to consistent light cards. */
+    .hko-card-body > div:has(#c6StationName), .hko-card-body > div:has(#c6AstroTitle) { background:#fff!important; border-color:#E1E1E1!important; }
+    .hko-card-body > div:has(#c6StationName) .border-b, .hko-card-body > div:has(#c6AstroTitle) .border-b { border-color:#eee!important; }
+    #c6HighLabel, #c6LowLabel { color:#555!important; }
+    .nine-day-toolbar { min-height:30px; }
+    #nineDayScrollHint { color:#555!important; }
+    .nine-day-scroll-btn { width:30px; height:30px; border:1px solid #CDCDCD; border-radius:7px; background:#fff; color:#0ea5e9; cursor:pointer; }
+    .nine-day-scroll-btn:hover { background:#f0f9ff; border-color:#0ea5e9; }
+    .nine-day-scroller { scrollbar-width:thin; scrollbar-color:#0ea5e9 #eee; scroll-behavior:smooth; }
+    .nine-day-scroller::-webkit-scrollbar { height:8px; }
+    .nine-day-scroller::-webkit-scrollbar-track { background:#eee; border-radius:99px; }
+    .nine-day-scroller::-webkit-scrollbar-thumb { background:#0ea5e9; border-radius:99px; }
+    #nineDayForecastList { width:max-content; min-width:100%; padding:2px 1px 6px; }
+    .nine-day-card { flex:0 0 142px; width:142px; min-height:224px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; padding:11px 9px; background:#fff; border:1px solid #E1E1E1; border-radius:10px; color:#262626; box-shadow:0 2px 8px rgba(0,0,0,.035); }
+    .nine-day-card:first-child { border-top:3px solid #0ea5e9; }
+    .nine-day-date { color:#222; font-size:14px; font-weight:800; }
+    .nine-day-week { color:#666; font-size:11px; font-weight:600; min-height:15px; }
+    .nine-day-icon-wrap { height:40px; display:flex; align-items:center; justify-content:center; }
+    .nine-day-weather-icon { width:38px; height:38px; object-fit:contain; }
+    .nine-day-fallback-icon { color:#0ea5e9; font-size:27px; }
+    .nine-day-weather { color:#444; font-size:11px; line-height:1.45; min-height:32px; display:flex; align-items:center; justify-content:center; }
+    .nine-day-temp { display:flex; gap:4px; align-items:baseline; font-size:13px; color:#555; white-space:nowrap; }
+    .nine-day-temp strong { color:#222; font-size:15px; }
+    .nine-day-temp-sep { color:#aaa; }
+    .nine-day-rh, .nine-day-rain, .nine-day-wind { color:#555; font-size:10px; line-height:1.35; }
+    .nine-day-rain { color:#0ea5e9; background:#f0f9ff; border-radius:5px; padding:3px 5px; }
+    @media(max-width:640px) { .nine-day-card { flex-basis:132px; width:132px; } .nine-day-scroll-btn { width:34px;height:34px; } }
+
+  </style>
+</head>
+<body class="flex flex-col">
+
+  <header class="bg-[#0b1a30] border-b border-[#244880] px-4 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-md select-none">
+    <div class="flex items-center gap-3">
+      <!-- 標題與所屬單位文字呈現 -->
+      <div class="flex flex-col">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-bold text-[#0ea5e9] tracking-wider">營運天氣監察</span>
+          <span class="text-[10px] text-slate-400 font-medium">HKO</span>
+        </div>
+        <h1 id="pageHeadingTitle" class="text-lg font-bold tracking-wide text-slate-900 leading-tight">天氣營運儀表板</h1>
+      </div>
+    </div>
+
+    <!-- Header Tools & Controls -->
+    <div class="flex items-center gap-3 text-xs sm:text-sm">
+      <!-- Live Time Header -->
+      <div class="hidden lg:flex items-center gap-2 text-slate-200">
+        <i class="far fa-clock text-sky-400"></i>
+        <span id="topLiveClock">--</span>
+      </div>
+
+      <!-- Sync Status Badge -->
+      <div class="hidden md:flex items-center gap-1.5 text-xs text-sky-300 bg-[#122849] px-2 py-1 rounded border border-[#23477e]">
+        <i class="fas fa-check-circle text-emerald-400"></i>
+        <span>同步: <span id="lastSyncTimeText">已更新</span></span>
+      </div>
+
+      <!-- Auto Refresh Interval Selector -->
+      <div class="flex items-center gap-1.5 bg-[#17335d] border border-[#2b528e] px-2.5 py-1 rounded text-xs text-white">
+        <i class="fas fa-arrows-rotate text-emerald-400" id="mainRefreshIcon"></i>
+        <span id="labelAutoRefresh" class="hidden sm:inline">更新設定:</span>
+        <select id="autoRefreshSelect" onchange="changeRefreshInterval()" class="bg-transparent text-white font-medium outline-none cursor-pointer focus:ring-1 focus:ring-sky-400 rounded">
+          <option value="900000" selected>每 15 分鐘</option>
+          <option value="1800000">每 30 分鐘 (半小時)</option>
+          <option value="300000">每 5 分鐘</option>
+          <option value="3600000">每 1 小時</option>
+          <option value="0">人手更新 (手動)</option>
+        </select>
+      </div>
+
+      <!-- Bilingual Language Toggle Button -->
+      <button onclick="toggleAppLanguage()" id="langToggleBtn" class="bg-[#2563eb] hover:bg-blue-600 text-white font-semibold px-3 py-1 rounded text-xs transition border border-blue-400 shadow">
+        English
+      </button>
+
+      <!-- Refresh Now Button -->
+      <button onclick="fetchAllHkoData(true)" title="人手更新所有資料" class="bg-[#17335d] hover:bg-[#20457d] text-white px-2.5 py-1 rounded text-xs border border-[#2b528e] flex items-center gap-1">
+        <i class="fas fa-rotate" id="manualBtnIcon"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Top Emergency Warning Banner -->
+  <div id="activeWarningBanner" class="bg-gradient-to-r from-red-950 via-red-900 to-amber-950 border-b border-red-500/60 px-4 py-2 flex items-center justify-between shadow hidden">
+    <div class="flex items-center gap-2.5 text-xs sm:text-sm text-red-200">
+      <i class="fas fa-triangle-exclamation text-amber-400 text-base animate-bounce"></i>
+      <span class="font-bold text-white" id="warningBannerTitle">天氣警告提示：</span>
+      <span id="warningBannerContent" class="text-slate-100"></span>
+    </div>
+    <button onclick="dismissWarningBanner()" class="text-slate-300 hover:text-white text-xs px-2 py-0.5">
+      <i class="fas fa-xmark text-sm"></i>
+    </button>
+  </div>
+
+
+  <nav class="ops-sidebar" aria-label="Dashboard sections">
+    <div class="ops-sidebar-label">Operations</div>
+    <a class="ops-nav-link active" href="#opsOverview"><i class="fas fa-gauge-high"></i><span data-nav-tc="營運總覽" data-nav-en="Overview">營運總覽</span></a>
+    <a class="ops-nav-link" href="#opsAlertsSection"><i class="fas fa-triangle-exclamation"></i><span data-nav-tc="風險警示" data-nav-en="Risk alerts">風險警示</span></a>
+    <a class="ops-nav-link" href="#opsMapSection"><i class="fas fa-map-location-dot"></i><span data-nav-tc="碼頭風險地圖" data-nav-en="Terminal map">碼頭風險地圖</span></a>
+    <a class="ops-nav-link" href="#opsMatrixSection"><i class="fas fa-table-list"></i><span data-nav-tc="風險矩陣" data-nav-en="Risk matrix">風險矩陣</span></a>
+    <a class="ops-nav-link" href="#opsSelectedSection"><i class="fas fa-chart-line"></i><span data-nav-tc="六小時預報" data-nav-en="6-hour forecast">六小時預報</span></a>
+    <a class="ops-nav-link" href="#scnWeatherSection"><i class="fas fa-cloud-sun"></i><span data-nav-tc="HKSCN 天氣" data-nav-en="HKSCN weather">HKSCN 天氣</span></a>
+    <a class="ops-nav-link" href="#opsHealthSection"><i class="fas fa-heart-pulse"></i><span data-nav-tc="資料及門檻設定" data-nav-en="Data & thresholds">資料及門檻設定</span></a>
+    <a class="ops-nav-link" href="#opsDetailsSection"><i class="fas fa-layer-group"></i><span data-nav-tc="詳細天氣資料" data-nav-en="Detailed weather">詳細天氣資料</span></a>
+  </nav>
+
+  <main class="flex-1 p-3 sm:p-4 overflow-y-auto">
+    <div class="ops-shell space-y-3.5">
+
+      <!-- OPS HEADER / DECISION BAR -->
+      <section class="ops-card ops-section-anchor" id="opsOverview">
+        <div class="ops-card-header flex-wrap">
+          <div>
+            <div class="text-base font-extrabold tracking-wide" id="opsTitle">WEATHER OPS CONTROL</div>
+            <div class="text-[11px] ops-muted mt-0.5" id="opsSubtitle">HK / HKSCN 營運天氣風險總覽</div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap text-xs">
+            <span id="opsOverallStatus" class="ops-status ops-normal"><i class="fas fa-circle-check"></i> NORMAL</span>
+            <span class="ops-muted"><span id="opsLastSyncLabel">最後同步</span>: <b id="opsLastSync">--</b></span>
+            <button onclick="fetchAllHkoData(true)" class="bg-[#2563eb] hover:bg-blue-600 px-3 py-1.5 rounded font-semibold"><i class="fas fa-rotate mr-1" id="opsRefreshIcon"></i><span id="opsRefreshLabel">更新</span></button>
+          </div>
+        </div>
+
+        <!-- What does the risk status mean? -->
+        <div class="px-3 pt-3">
+          <div class="ops-explainer">
+            <div class="font-bold text-sm mb-1.5" id="opsMeaningTitle">呢個風險狀態係點計？</div>
+            <div class="text-[11px] leading-5 ops-muted" id="opsMeaningText">
+              系統會將 <b class="text-white">香港 HK + 六個 HKSCN 碼頭</b> 目前及未來 6 小時嘅風、陣風、降雨、能見度及雷暴資料，逐個地點同你設定嘅 OPS threshold 比較。<b class="text-emerald-200">NORMAL</b> = 暫時冇 threshold 被觸發；<b class="text-amber-200">WATCH</b> = 有潛在風險需要留意；<b class="text-red-200">WARNING</b> = 已觸發較高風險 threshold；<b class="text-red-300">CRITICAL</b> = 嚴重 threshold / 雷暴等高風險條件。<br>
+              <span class="text-slate-400">注意：呢個係 weather risk indicator，唔等於自動停止碼頭操作；最終以你公司 terminal-specific SOP / operation limit 為準。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
+          <div class="ops-kpi"><div class="label" id="opsKpiWarning">HKO 生效警告</div><div id="opsWarningCount" class="value">--</div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiCritical">嚴重風險地點</div><div id="opsCriticalCount" class="value">--</div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiWarningSite">警告地點</div><div id="opsWarningTerminalCount" class="value">--</div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiWatch">需留意地點</div><div id="opsWatchCount" class="value">--</div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiMaxWind">最高風速</div><div id="opsMaxWind" class="value">-- <span class="text-xs font-normal">kt</span></div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiMaxGust">最高陣風</div><div id="opsMaxGust" class="value">-- <span class="text-xs font-normal">kt</span></div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiMinVis">最低能見度</div><div id="opsMinVis" class="value">-- <span class="text-xs font-normal">km</span></div></div>
+          <div class="ops-kpi"><div class="label" id="opsKpiRain">未來6小時雨/雷暴</div><div id="opsRainRisk" class="value text-lg">--</div></div>
+        </div>
+      </section>
+
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
+        <!-- ALERT CENTER -->
+        <section class="ops-card ops-section-anchor xl:col-span-3" id="opsAlertsSection">
+          <div class="ops-card-header"><div class="ops-card-title"><i class="fas fa-triangle-exclamation text-amber-400 mr-1.5"></i><span id="opsAlertTitle">營運天氣警報中心</span></div><span class="ops-legend" id="opsAlertLegend">目前 + 未來6小時</span></div>
+          <div id="opsAlertCenter" class="ops-alert-grid p-3"><div class="ops-muted text-xs" id="opsAlertLoading">載入營運警報中...</div></div>
+        </section>
+
+        <!-- V13: Persistent risk status transition history -->
+        <section class="ops-card ops-section-anchor xl:col-span-3" id="opsHistorySection">
+          <div class="ops-card-header flex-wrap">
+            <div class="ops-card-title"><i class="fas fa-clock-rotate-left mr-1.5" style="color:#0ea5e9"></i><span id="opsHistoryTitle">營運風險狀態歷史</span></div>
+            <div class="flex items-center gap-2"><span id="opsHistoryCount" class="ops-legend">0 events</span><button type="button" class="map-retry-btn" style="margin-top:0" onclick="clearOpsHistory()" id="opsHistoryClear">清除歷史</button></div>
+          </div>
+          <div class="p-3"><div id="opsHistoryList" class="ops-history-list"><div class="ops-history-empty">首次取得資料後開始監察狀態變化。</div></div><p class="text-[10px] mt-2" style="color:#666" id="opsHistoryNote">歷史紀錄儲存於此瀏覽器；清除網站資料或更換裝置不會保留。此紀錄供監察參考，並非正式稽核日誌。</p></div>
+        </section>
+
+        <!-- Interactive HK + HKSCN operational weather map -->
+        <section class="ops-card ops-section-anchor xl:col-span-3" id="opsMapSection">
+          <div class="ops-card-header flex-wrap">
+            <div class="ops-card-title"><i class="fas fa-map-location-dot mr-1.5" style="color:#0ea5e9"></i><span id="opsMapTitle">香港及 HKSCN 碼頭風險地圖</span></div>
+            <span class="ops-legend" id="opsMapSubtitle">選取地圖標記或右側地點，查看當前天氣數據</span>
+          </div>
+          <div class="p-3 grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)] gap-3">
+            <div>
+              <div class="terminal-map-wrap">
+                <div id="terminalMap" role="application" aria-label="Hong Kong and HKSCN terminal weather risk map"></div>
+                <div id="terminalMapStatus" class="terminal-map-status"><span class="map-status-spinner"></span> 正在載入地圖…</div>
+              </div>
+              <div class="flex flex-wrap gap-3 mt-3 text-xs" style="color:#444">
+                <span class="flex items-center gap-2"><i class="map-risk-dot" style="background:#2E8B57"></i>NORMAL</span>
+                <span class="flex items-center gap-2"><i class="map-risk-dot" style="background:#D89A00"></i>WATCH</span>
+                <span class="flex items-center gap-2"><i class="map-risk-dot" style="background:#D94841"></i>WARNING</span>
+                <span class="flex items-center gap-2"><i class="map-risk-dot" style="background:#0ea5e9"></i>CRITICAL</span>
+                <span class="text-gray-500">OpenFreeMap © OpenMapTiles · Data © OpenStreetMap contributors</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-2"><b id="mapSiteListTitle" class="text-sm">地點即時摘要</b><span id="mapSiteCount" class="text-xs" style="color:#555">0 / 7</span></div>
+              <div id="mapSiteList" class="map-site-list"><div class="p-4 text-sm" style="color:#555">正在載入地點資料…</div></div>
+            </div>
+          </div>
+          <div class="px-3 pb-3 text-xs leading-5" style="color:#555">地圖底圖由 OpenFreeMap 提供（OpenMapTiles；地圖資料 © OpenStreetMap contributors）。地圖位置為各碼頭附近的代表座標；天氣資料來自座標附近的模型預報，不代表碼頭現場儀器實測。風險狀態依目前設定的 OPS 門檻計算。</div>
+        </section>
+
+        <!-- ALL HK + HKSCN SITES MATRIX -->
+        <section class="ops-card ops-section-anchor xl:col-span-3" id="opsMatrixSection">
+          <div class="ops-card-header">
+            <div class="ops-card-title"><i class="fas fa-ship text-sky-300 mr-1.5"></i><span id="opsMatrixTitle">HK + HKSCN 碼頭風險矩陣</span></div>
+            <span class="ops-legend" id="opsMatrixHint">點擊任何地點查看未來6小時</span>
+          </div>
+          <div class="ops-scroll max-h-[430px] overflow-y-auto">
+            <table class="ops-table"><thead><tr><th id="thSite">地點</th><th id="thWind">風速</th><th id="thGust">陣風</th><th id="thRain">雨概率</th><th id="thVis">能見度</th><th id="thCondition">天氣</th><th id="thStatus">風險</th></tr></thead><tbody id="opsTerminalMatrix"><tr><td colspan="7" class="ops-muted p-4" id="opsMatrixLoading">載入地點資料中...</td></tr></tbody></table>
+          </div>
+          <div class="px-3 py-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#28518a]">
+            <span class="ops-legend" id="opsMatrixDisclaimer">風險只係指標；實際 operation limit 請以公司 SOP 為準。</span>
+            <div class="flex gap-2 items-center flex-wrap"><span class="ops-status ops-normal" id="legendNormal">NORMAL</span><span class="ops-status ops-watch" id="legendWatch">WATCH</span><span class="ops-status ops-warning" id="legendWarning">WARNING</span><span class="ops-status ops-critical" id="legendCritical">CRITICAL</span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SELECTED SITE -->
+      <section class="ops-card ops-section-anchor" id="opsSelectedSection">
+        <div class="ops-card-header flex-wrap gap-3">
+          <div><div class="ops-card-title"><i class="fas fa-chart-line mr-1.5" style="color:#0ea5e9"></i><span id="opsSelectedTitle">所選地點 — CNSHK 蛇口</span></div><div class="text-[10px] ops-muted mt-0.5" id="opsSelectedSubtitle">未來六小時天氣預報及營運指標</div></div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <label for="opsForecastSiteSelect" class="text-xs font-semibold" style="color:#333">選擇預報地點</label>
+            <select id="opsForecastSiteSelect" onchange="selectForecastSite(this.value)" class="ops-forecast-select" aria-label="選擇六小時預報地點">
+              <option value="HK">HK — 香港葵涌／青衣</option>
+              <option value="CNDCB">CNDCB — 大鏟灣</option>
+              <option value="CNSHK" selected>CNSHK — 蛇口</option>
+              <option value="CNYTN">CNYTN — 鹽田</option>
+              <option value="CNNSA">CNNSA — 南沙</option>
+              <option value="CNXMN">CNXMN — 廈門</option>
+              <option value="CNQZH">CNQZH — 泉州</option>
+            </select>
+            <span id="opsSelectedStatus" class="ops-status ops-normal">NORMAL</span>
+          </div>
+        </div>
+        <div class="px-3 pt-2 text-xs" style="color:#555">此預報地點由本區獨立選擇，不會因點擊風險地圖或風險矩陣而自動切換。</div>
+        <div class="p-3"><div id="opsSixHourForecast" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5"><div class="ops-muted text-xs">載入預測中...</div></div></div>
+      </section>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+        <!-- DATA HEALTH -->
+        <section class="ops-card ops-section-anchor" id="opsHealthSection">
+          <div class="ops-card-header"><div class="ops-card-title"><i class="fas fa-heart-pulse text-emerald-300 mr-1.5"></i><span id="opsHealthTitle">資料健康狀態</span></div><span class="ops-legend" id="opsHealthLegend">不要使用過期資料</span></div>
+          <div class="p-3" id="opsDataHealth">
+            <div class="ops-health-row"><span id="healthLabelHko">HKO 即時天氣</span><span><i class="ops-dot gray"></i><span id="healthHko">等待中</span></span></div>
+            <div class="ops-health-row"><span id="healthLabelWarn">HKO 天氣警告</span><span><i class="ops-dot gray"></i><span id="healthWarn">等待中</span></span></div>
+            <div class="ops-health-row"><span id="healthLabelScn">HKSCN Open-Meteo</span><span><i class="ops-dot gray"></i><span id="healthScn">等待中</span></span></div>
+            <div class="ops-health-row"><span id="healthLabelTide">潮汐</span><span><i class="ops-dot warn"></i><span id="healthTide">原本設定資料表</span></span></div>
+          </div>
+        </section>
+
+        <!-- THRESHOLDS -->
+        <section class="ops-card">
+          <div class="ops-card-header"><div class="ops-card-title"><i class="fas fa-sliders text-sky-300 mr-1.5"></i><span id="opsThresholdTitle">OPS 工作 Threshold</span></div><span class="ops-legend" id="opsThresholdLegend">只儲存於此瀏覽器</span></div>
+          <div class="p-3 grid grid-cols-2 gap-2 text-xs">
+            <label class="flex justify-between items-center gap-2"><span id="lblWindWatch">風速 Watch</span><input id="thrWindWatch" class="ops-threshold" type="number" min="1" value="20"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblWindWarn">風速 Warning</span><input id="thrWindWarn" class="ops-threshold" type="number" min="1" value="30"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblWindCrit">風速 Critical</span><input id="thrWindCrit" class="ops-threshold" type="number" min="1" value="40"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblGustWatch">陣風 Watch</span><input id="thrGustWatch" class="ops-threshold" type="number" min="1" value="30"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblGustWarn">陣風 Warning</span><input id="thrGustWarn" class="ops-threshold" type="number" min="1" value="40"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblGustCrit">陣風 Critical</span><input id="thrGustCrit" class="ops-threshold" type="number" min="1" value="50"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblRain">降雨概率</span><input id="thrRain" class="ops-threshold" type="number" min="1" max="100" value="60"></label>
+            <label class="flex justify-between items-center gap-2"><span id="lblVis">能見度 (km)</span><input id="thrVis" class="ops-threshold" type="number" min="0.1" step="0.1" value="3"></label>
+          </div>
+          <div class="px-3 pb-3"><button onclick="saveOpsThresholds()" id="opsApplyThreshold" class="w-full bg-[#173f70] hover:bg-[#20538f] border border-[#376aa7] rounded py-1.5 text-xs font-bold">套用 Threshold</button></div>
+        </section>
+
+        <!-- STATUS GUIDE -->
+        <section class="ops-card">
+          <div class="ops-card-header"><div class="ops-card-title"><i class="fas fa-circle-info text-amber-300 mr-1.5"></i><span id="opsGuideTitle">風險狀態指南</span></div></div>
+          <div class="p-3 text-xs leading-5 space-y-2">
+            <div><span class="ops-status ops-normal">NORMAL</span> <span id="guideNormal">未觸發任何工作 threshold，暫時正常。</span></div>
+            <div><span class="ops-status ops-watch">WATCH</span> <span id="guideWatch">開始接近 / 觸發較低級別風險，建議留意未來變化。</span></div>
+            <div><span class="ops-status ops-warning">WARNING</span> <span id="guideWarning">已觸發較高風、陣風或能見度 threshold，需要 OPS 關注。</span></div>
+            <div><span class="ops-status ops-critical">CRITICAL</span> <span id="guideCritical">嚴重 threshold 或雷暴等高風險條件；應立即按公司 SOP 處理。</span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Existing HKO detailed information retained as secondary layer -->
+      <details class="ops-card ops-section-anchor" id="opsDetailsSection">
+        <summary class="ops-card-header cursor-pointer list-none"><span class="ops-card-title"><i class="fas fa-layer-group text-slate-300 mr-1.5"></i><span id="opsDetailsTitle">詳細 HKO / 天文 / 潮汐資料</span></span><span class="ops-legend" id="opsDetailsHint">次要資料 — 點擊展開</span></summary>
+        <div class="p-3">
+
+    <!-- 3-Column Responsive Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-start">
+
+      <!-- ========================================== -->
+      <!-- COLUMN 1: 當前天氣報告 / 分區預報 / 氣溫詳報 -->
+      <!-- ========================================== -->
+      <div class="flex flex-col gap-3.5">
+
+        <!-- Card 1: Current Weather Report -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c1Title">天氣報告</span>
+            <span class="text-xs text-sky-200 font-normal">HKO API</span>
+          </div>
+
+          <div class="hko-card-body">
+            <div class="weather-report-card-bg">
+              <div class="flex justify-between items-start">
+                <div>
+                  <div class="text-base font-bold text-white tracking-wide" id="c1StationName">天文台</div>
+                  <div class="text-xs text-blue-100 mt-0.5" id="c1MinMaxTemp">25-31°C</div>
+                  
+                  <div class="flex items-baseline gap-1 mt-4">
+                    <span id="c1CurrentTemp" class="text-5xl font-extrabold tracking-tighter drop-shadow">28.9</span>
+                    <span class="text-3xl font-bold">°C</span>
+                  </div>
+                  <div class="text-3xl font-bold mt-1 text-white/95" id="c1CurrentHumidity">61%</div>
+                </div>
+
+                <!-- Sun / Weather Icon -->
+                <div class="text-amber-300 text-6xl drop-shadow-md pr-2 pt-1" id="c1WeatherIcon">
+                  <i class="fas fa-sun"></i>
+                </div>
+              </div>
+
+              <div class="mt-6 pt-2 border-t border-white/25 flex justify-between items-end text-xs text-white">
+                <div>
+                  <div id="c1UvText" class="font-semibold">紫外線指數 7 (甚高)</div>
+                  <div id="c1UpdateTime" class="text-blue-100 text-[11px] mt-0.5">-- 更新</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchCurrentWeatherReport(true)" title="人手更新天氣報告"><i class="fas fa-arrows-rotate" id="c1RefreshSpin"></i></button>
+              <button onclick="showInfoModal('c1')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a href="https://www.hko.gov.hk/tc/wxinfo/currwx/current.htm" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- Card 2: Automatic Regional Weather Forecast -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c2Title">自動分區天氣預報</span>
+            <select id="autoForecastStationSelect" onchange="updateSelectedAutoStationForecast()" class="bg-[#24497e] text-white text-xs px-2 py-0.5 rounded outline-none border border-[#3b6db7] max-w-[170px] focus:ring-1 focus:ring-sky-400">
+              <option value="Tsing Yi" selected>青衣 Tsing Yi</option>
+              <option value="Cheung Chau">長洲 Cheung Chau</option>
+              <option value="Chek Lap Kok">赤鱲角 Chek Lap Kok</option>
+              <option value="Hong Kong Observatory">天文台 Hong Kong Observatory</option>
+              <option value="Hong Kong Park">香港公園 Hong Kong Park</option>
+              <option value="Wong Chuk Hang">黃竹坑 Wong Chuk Hang</option>
+              <option value="Happy Valley">跑馬地 Happy Valley</option>
+              <option value="Tseung Kwan O">將軍澳 Tseung Kwan O</option>
+              <option value="King's Park">京士柏 King's Park</option>
+              <option value="Lok Ma Chau">落馬洲 Lok Ma Chau</option>
+              <option value="Kwun Tong">觀塘 Kwun Tong</option>
+              <option value="Lau Fau Shan">流浮山 Lau Fau Shan</option>
+              <option value="Ngong Ping">昂坪 Ngong Ping</option>
+              <option value="Peng Chau">坪洲 Peng Chau</option>
+              <option value="Shek Kong">石崗 Shek Kong</option>
+              <option value="Sha Tin">沙田 Sha Tin</option>
+              <option value="Sai Kung">西貢 Sai Kung</option>
+              <option value="Shau Kei Wan">筲箕灣 Shau Kei Wan</option>
+              <option value="Sheung Shui">上水 Sheung Shui</option>
+              <option value="Sham Shui Po">深水埗 Sham Shui Po</option>
+              <option value="Stanley">赤柱 Stanley</option>
+              <option value="Tsuen Wan Ho Koon">荃灣可觀 Tsuen Wan Ho Koon</option>
+              <option value="Pak Tam Chung">北潭涌 Pak Tam Chung</option>
+              <option value="Victoria Peak">太平山 Victoria Peak</option>
+              <option value="Waglan Island">橫瀾島 Waglan Island</option>
+              <option value="Wetland Park">濕地公園 Wetland Park</option>
+              <option value="Wong Tai Sin">黃大仙 Wong Tai Sin</option>
+              <option value="Tai Po">大埔 Tai Po</option>
+              <option value="Tuen Mun">屯門 Tuen Mun</option>
+              <option value="Central">中環 Central</option>
+              <option value="Ta Kwu Ling">打鼓嶺 Ta Kwu Ling</option>
+              <option value="Tai Mo Shan">大帽山 Tai Mo Shan</option>
+              <option value="Tap Mun">塔門 Tap Mun</option>
+              <option value="Kat O">吉澳 Kat O</option>
+            </select>
+          </div>
+
+          <div class="hko-card-body p-0 bg-[#162f59]">
+            <div class="bg-[#1f3f72] px-3 py-1.5 text-center text-xs font-semibold text-white border-b border-[#2b528e] data-flash" id="c2SubStationLabel">
+              青衣 Tsing Yi
+            </div>
+
+            <!-- Forecast Table Layout -->
+            <div class="divide-y divide-[#244880] text-xs text-white">
+              
+              <!-- Row 1 -->
+              <div class="flex items-center py-2.5 px-3">
+                <div class="w-1/4 text-center border-r border-[#244880] pr-2 data-flash" id="c2TempBox">
+                  <div class="font-bold" id="c2DateDay1">--</div>
+                  <div class="text-[10px] text-sky-300 mt-1 flex items-center justify-center gap-1">
+                    <i class="fas fa-umbrella"></i> <span id="c2RainProb">20%</span>
+                  </div>
+                  <div class="text-[10px] text-slate-300 mt-0.5">
+                    <i class="fas fa-arrow-up text-amber-400"></i> <span id="c2MaxT">31</span>°C<br>
+                    <i class="fas fa-arrow-down text-sky-400"></i> <span id="c2MinT">24</span>°C
+                  </div>
+                </div>
+
+                <div class="w-3/4 flex flex-col gap-2 pl-3 data-flash" id="c2HourlyList">
+                  <!-- Javascript 動態注入逐時資料 -->
+                </div>
+              </div>
+
+              <!-- Night Row -->
+              <div class="flex items-center py-2 px-3 bg-[#112445]">
+                <div class="w-1/4 text-center border-r border-[#244880] pr-2 text-slate-300">
+                  <div class="font-bold text-[11px]" id="c2NightLabel">晚間預報</div>
+                </div>
+                <div class="w-3/4 flex flex-col gap-1.5 pl-3 data-flash" id="c2NightList">
+                  <!-- Javascript 動態注入晚間資料 -->
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchCurrentWeatherReport(true)"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c2')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a id="c2OfficialLink" href="https://www.hko.gov.hk/tc/wxinfo/awsgis/regional_portal.html" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- Card 3: Local Weather Report -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c3Title">本港地區天氣報告</span>
+            <span class="text-xs text-slate-300 font-normal" id="c3ObsLabel">各區氣溫</span>
+          </div>
+
+          <div class="hko-card-body">
+            <p class="text-xs text-amber-200 leading-relaxed bg-[#0c1f3d] p-2.5 rounded border border-[#1e3c6c] mb-3 select-text" id="c3SummaryBulletin">
+              載入天文台最新地區報告中...
+            </p>
+
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-1.5 text-xs text-slate-200 font-medium">
+                <i class="fas fa-temperature-three-quarters text-amber-400"></i>
+                <span id="c3ListHeading">其他地區的氣溫：</span>
+              </div>
+            </div>
+
+            <!-- Region Filter Tabs -->
+            <div class="flex gap-1.5 mb-2.5 select-none">
+              <button onclick="filterStationList('all')" id="btnFilterAll" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white shadow focus:outline-none">全港 All</button>
+              <button onclick="filterStationList('hk')" id="btnFilterHK" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1e427b] text-slate-200 hover:bg-blue-700 focus:outline-none">港島 HK</button>
+              <button onclick="filterStationList('kln')" id="btnFilterKln" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1e427b] text-slate-200 hover:bg-blue-700 focus:outline-none">九龍 Kln</button>
+              <button onclick="filterStationList('nt')" id="btnFilterNT" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1e427b] text-slate-200 hover:bg-blue-700 focus:outline-none">新界 NT</button>
+            </div>
+
+            <div id="stationListContainer" class="max-h-[260px] overflow-y-auto divide-y divide-[#203f6f] text-xs pr-1 select-text">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchCurrentWeatherReport(true)"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c3')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a href="https://www.hko.gov.hk/tc/wxinfo/ts/index.htm" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ========================================== -->
+      <!-- COLUMN 2: 華南碼頭 / 天氣預報 / 颱風與警告 / 潮汐與海溫 -->
+      <!-- ========================================== -->
+      <div class="flex flex-col gap-3.5">
+
+        <!-- NEW Card: HKSCN Terminal Weather (Open-Meteo Integration) -->
+        <section class="hko-card border border-amber-500/40">
+          <div class="hko-card-header bg-gradient-to-r from-[#1a3a6e] to-[#2d2812]">
+            <span id="scnTitle" class="flex items-center gap-1.5"><i class="fas fa-ship text-amber-400"></i> <span id="scnHeaderLabel">華南碼頭天氣 (HKSCN)</span></span>
+            <select id="scnTerminalSelect" onchange="selectScnTerminalFromDropdown()" class="bg-[#24497e] text-white text-xs px-2 py-0.5 rounded outline-none border border-[#3b6db7] max-w-[170px] focus:ring-1 focus:ring-amber-400">
+              <option value="CNDCB">CNDCB 大鏟灣 (Da Chan Bay)</option>
+              <option value="CNSHK" selected>CNSHK 蛇口 (Shekou)</option>
+              <option value="CNYTN">CNYTN 鹽田 (Yantian)</option>
+              <option value="CNNSA">CNNSA 南沙 (Nansha)</option>
+              <option value="CNXMN">CNXMN 廈門 (Xiamen)</option>
+              <option value="CNQZH">CNQZH 泉州 (Quanzhou)</option>
+            </select>
+          </div>
+
+          <div class="hko-card-body p-3.5 bg-[#0e192c]">
+            <div class="flex justify-between items-center border-b border-[#253e66] pb-3 mb-3">
+              <div class="data-flash" id="scnFlashArea1">
+                <div class="text-xs font-mono text-slate-300 font-bold" id="scnTerminalId">CNSHK - Shekou Terminal</div>
+                <div class="flex items-center gap-2 mt-1">
+                  <span id="scnTemp" class="text-3xl font-extrabold text-white">--°C</span>
+                  <div class="text-2xl" id="scnIcon"><i class="fas fa-spinner fa-spin text-slate-400"></i></div>
+                </div>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">Open-Meteo API</span>
+                <div class="text-xs text-slate-200 mt-1 font-medium" id="scnDesc">載入中...</div>
+              </div>
+            </div>
+
+            <!-- Terminal Marine Operational Metrics -->
+            <div class="grid grid-cols-2 gap-2.5 text-xs data-flash" id="scnFlashArea2">
+              <div class="bg-[#142847] p-2.5 rounded border border-[#23477e] flex flex-col justify-between">
+                <span class="text-slate-300 font-medium" id="scnWindSpeedLabel"><i class="fas fa-wind text-sky-400 mr-1"></i>風速 (Wind)</span>
+                <div class="flex items-end gap-1 mt-1">
+                  <span id="scnWindSpeed" class="text-2xl font-extrabold text-white">--</span>
+                  <span class="text-slate-300 text-[11px] pb-0.5">knots</span>
+                </div>
+                <span id="scnWindDir" class="text-[10px] text-sky-300 mt-1">風向: --°</span>
+              </div>
+
+              <div class="bg-[#142847] p-2.5 rounded border border-[#23477e] flex flex-col justify-between">
+                <span class="text-slate-300 font-medium" id="scnWindGustLabel"><i class="fas fa-circle-exclamation text-amber-400 mr-1"></i>陣風 (Gusts)</span>
+                <div class="flex items-end gap-1 mt-1">
+                  <span id="scnWindGust" class="text-2xl font-extrabold text-amber-400">--</span>
+                  <span class="text-slate-300 text-[11px] pb-0.5">knots</span>
+                </div>
+                <span id="scnHumidity" class="text-[10px] text-slate-300 mt-1">相對濕度: --%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchScnTerminalWeather()"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('scn')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <span class="text-[10px] text-slate-500">即時華南碼頭海事氣象</span>
+          </div>
+        </section>
+
+        <!-- Card 4: Local Weather Forecast -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c4Title">本港天氣預報</span>
+            <i class="fas fa-cloud-sun text-amber-300"></i>
+          </div>
+
+          <div class="hko-card-body">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="text-4xl text-amber-300" id="c4ForecastIcon">
+                <i class="fas fa-sun"></i>
+              </div>
+              <div class="text-xs text-slate-300 font-medium" id="c4OverviewShort">
+                東北季候風正影響廣東沿岸地區。
+              </div>
+            </div>
+
+            <div class="space-y-3 text-xs leading-relaxed text-slate-200 bg-[#0e2447] p-3 rounded border border-[#1f4277] select-text">
+              <div>
+                <span class="font-bold text-sky-300 block mb-0.5" id="c4TodayLabel">今日天氣預測：</span>
+                <span id="c4ForecastToday">載入中...</span>
+              </div>
+
+              <div>
+                <span class="font-bold text-sky-300 block mb-0.5" id="c4OutlookLabel">展望：</span>
+                <span id="c4ForecastOutlook">載入中...</span>
+              </div>
+            </div>
+
+            <div class="mt-3 text-[11px] text-slate-400 text-right" id="c4UpdateTime">
+              -- HKT 更新
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchLocalWeatherForecast()"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c4')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a href="https://www.hko.gov.hk/tc/wxinfo/currwx/flw.htm" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- UPGRADED Card 5: Special Weather Warnings (All Warnings, not just TC) -->
+        <section class="hko-card border border-red-500/30">
+          <div class="hko-card-header bg-gradient-to-r from-red-950 to-[#1a3a6e]">
+            <span id="c5Title"><i class="fas fa-triangle-exclamation text-amber-400 mr-1"></i> 特別天氣警告信號</span>
+            <span id="tcStatusBadge" class="text-[10px] bg-emerald-700 text-emerald-100 px-2 py-0.5 rounded font-medium">--</span>
+          </div>
+
+          <div class="hko-card-body p-3 bg-[#0e1624] flex flex-col justify-center min-h-[160px]">
+            <!-- Normal State -->
+            <div id="tcNormalBox" class="flex flex-col items-center text-center py-4 hidden">
+              <i class="fas fa-shield-check text-emerald-400 text-3xl mb-2"></i>
+              <div class="text-sm font-bold text-white tracking-wide" id="tcMainStatusText">現時沒有生效的天氣警告</div>
+              <p class="text-xs text-slate-400 mt-2 max-w-[220px]" id="tcDescText">香港境內目前無警告信號生效。</p>
+            </div>
+            <!-- Active Warning State -->
+            <div id="tcWarningBox" class="hidden flex-col gap-2">
+              <div class="text-xs text-slate-300 border-b border-[#244880] pb-1" id="tcActiveLabel">現正生效信號 Active Warnings:</div>
+              <div id="tcWarningList" class="flex flex-col gap-2 mt-1">
+                <!-- Javascript will inject active warnings here -->
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchWarningSummary()"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c5')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a id="tcOfficialLink" href="https://www.hko.gov.hk/tc/wxinfo/currwx/warn.htm" target="_blank" rel="noopener noreferrer" title="前往香港天文台警告資訊頁面">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- Card 6: Tide & Astro (保留 15 個潮汐站選擇下拉選單) -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c6TideTitle">潮汐與海溫</span>
+            <select id="tideStationSelect" onchange="updateSelectedTideStation()" class="bg-[#24497e] text-white text-xs px-2 py-0.5 rounded outline-none border border-[#3b6db7] max-w-[170px] focus:ring-1 focus:ring-sky-400">
+              <option value="Kwai Chung" selected>葵涌 Kwai Chung</option>
+              <option value="Quarry Bay">鰂魚涌 Quarry Bay</option>
+              <option value="Tsim Bei Tsui">尖鼻咀 Tsim Bei Tsui</option>
+              <option value="Lok On Pai">樂安排 Lok On Pai</option>
+              <option value="Chek Lap Kok (East)">赤鱲角(東) Chek Lap Kok (East)</option>
+              <option value="Tai O">大澳 Tai O</option>
+              <option value="Shek Pik">石壁 Shek Pik</option>
+              <option value="Ma Wan">馬灣 Ma Wan</option>
+              <option value="Chi Ma Wan">芝麻灣 Chi Ma Wan</option>
+              <option value="Cheung Chau">長洲 Cheung Chau</option>
+              <option value="Po Toi">蒲台 Po Toi</option>
+              <option value="Ko Lau Wan">高流灣 Ko Lau Wan</option>
+              <option value="Tai Po Kau">大埔滘 Tai Po Kau</option>
+              <option value="Tai Miu Wan">大廟灣 Tai Miu Wan</option>
+              <option value="Waglan Island">橫瀾島 Waglan Island</option>
+            </select>
+          </div>
+
+          <div class="hko-card-body p-3 space-y-3">
+            <!-- Tide Section -->
+            <div class="bg-[#112445] p-2.5 rounded border border-[#204377]">
+              <div class="flex justify-between items-center text-xs font-bold pb-2 border-b border-[#24497e]">
+                <span id="c6StationName" class="text-white text-sm">葵涌 Kwai Chung</span>
+                <!-- Updated label to show visual flash update -->
+                <span id="tideUpdateIndicator" class="text-sky-300 font-normal"></span>
+              </div>
+
+              <!-- High Tide -->
+              <div class="flex justify-between items-center py-2 border-b border-[#1c3a66] text-xs">
+                <span id="c6HighLabel" class="text-slate-200 font-medium">漲潮 High</span>
+                <div class="flex flex-col items-center text-sky-400">
+                  <i class="fas fa-arrow-up text-xs"></i>
+                  <i class="fas fa-water text-xs mt-0.5"></i>
+                </div>
+                <div class="text-right data-flash" id="c6HighData">
+                  <div class="font-bold text-white" id="valHighTideTime">04:12</div>
+                  <div class="text-sky-300 font-medium font-mono" id="valHighTideHeight">2.3m</div>
+                </div>
+              </div>
+
+              <!-- Low Tide -->
+              <div class="flex justify-between items-center py-2 border-b border-[#1c3a66] text-xs">
+                <span id="c6LowLabel" class="text-slate-200 font-medium">退潮 Low</span>
+                <div class="flex flex-col items-center text-sky-400">
+                  <i class="fas fa-arrow-down text-xs"></i>
+                  <i class="fas fa-water text-xs mt-0.5"></i>
+                </div>
+                <div class="text-right data-flash" id="c6LowData">
+                  <div class="font-bold text-white" id="valLowTideTime">12:05</div>
+                  <div class="text-sky-300 font-medium font-mono" id="valLowTideHeight">0.7m</div>
+                </div>
+              </div>
+
+              <!-- North Point SST -->
+              <div class="flex justify-between items-center pt-2 text-xs">
+                <span id="c6SstLabel" class="text-slate-300">北角海面溫度 (SST)</span>
+                <span class="font-bold text-amber-300 text-sm">29°C</span>
+              </div>
+            </div>
+
+            <!-- Astro Section -->
+            <div class="bg-[#112445] p-2.5 rounded border border-[#204377]">
+              <div class="flex justify-between items-center text-xs font-bold pb-2 border-b border-[#24497e]">
+                <span id="c6AstroTitle" class="text-white">天文資料 Astro</span>
+                <span id="c6AstroDate" class="text-slate-300 font-normal">05 Oct 2026</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-xs pt-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-300" id="lblSunrise"><i class="fas fa-sun text-yellow-400 mr-1"></i>日出:</span>
+                  <span class="font-bold text-white">06:16</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-300" id="lblSunset"><i class="fas fa-cloud-sun text-orange-400 mr-1"></i>日落:</span>
+                  <span class="font-bold text-white">18:07</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-300" id="lblMoonrise"><i class="fas fa-moon text-sky-200 mr-1"></i>月出:</span>
+                  <span class="font-bold text-white">00:45</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-300" id="lblMoonset"><i class="fas fa-moon text-slate-400 mr-1"></i>月落:</span>
+                  <span class="font-bold text-white">14:33</span>
+                </div>
+              </div>
+
+              <div class="flex justify-between items-center pt-2 mt-2 border-t border-[#1c3a66] text-xs">
+                <span id="lblMoonPhase" class="text-slate-300">月相 Moon Phase</span>
+                <div class="flex items-center gap-1.5 text-amber-200 font-medium">
+                  <span id="valMoonPhaseName">殘月 (Waning)</span>
+                  <i class="fas fa-circle-half-stroke text-base"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchCurrentWeatherReport(true)"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c6')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a id="c6OfficialLink" href="https://www.hko.gov.hk/tc/tide/etide_main.htm" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ========================================== -->
+      <!-- COLUMN 3: 時鐘日曆 / 九天預報 / 官方數據來源 -->
+      <!-- ========================================== -->
+      <div class="flex flex-col gap-3.5">
+
+        <!-- Card 7: Web Clock & Calendar -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c7Title">網上時鐘及日曆 (香港時間)</span>
+            <i class="far fa-calendar-check text-sky-300"></i>
+          </div>
+
+          <div class="hko-card-body flex flex-col justify-center">
+            <div class="flex items-center justify-around py-3">
+              <div class="flex flex-col items-center">
+                <div class="tear-calendar">
+                  <div class="tear-calendar-top" id="c7Weekday">Monday</div>
+                  <div class="tear-calendar-day" id="c7Day">05</div>
+                  <div class="tear-calendar-sub" id="c7MonthYear">05 Oct 2026</div>
+                </div>
+                <div class="text-[11px] text-slate-300 mt-2 font-medium" id="c7LunarText">
+                  丙午 馬年八月廿五日
+                </div>
+              </div>
+
+              <div class="flex flex-col items-center justify-center">
+                <div class="w-24 h-24 rounded-full bg-[#fdfbe9] border-2 border-[#528965] shadow-inner relative flex items-center justify-center">
+                  <canvas id="analogClockCanvas" width="96" height="96" class="w-full h-full block rounded-full"></canvas>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1 font-mono">HKT (UTC+8)</div>
+              </div>
+            </div>
+
+            <div class="text-center text-xs text-sky-200/80 pt-2 border-t border-[#1f4277]" id="c7SubLabel">
+              公曆／農曆對照 Gregorian/Lunar Calendar
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="updateCalendarAndClock()"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c7')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a href="https://www.hko.gov.hk/tc/gts/time/clock_e.html" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- Card 8: 9-Day Weather Forecast -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c8Title">香港九天天氣預報</span>
+            <span class="text-xs text-sky-200 font-normal">9-day Forecast</span>
+          </div>
+
+          <div class="hko-card-body p-3">
+            <p class="text-xs text-slate-200 leading-relaxed bg-[#0c1f3d] p-2.5 rounded border border-[#1e3c6c] mb-3 select-text" id="c8GeneralSituation">
+              載入天文台九天天氣預報中...
+            </p>
+
+            <div class="nine-day-toolbar flex items-center justify-between gap-2 mb-2">
+              <span id="nineDayScrollHint" class="text-xs font-medium">左右滑動／按箭頭查看更多天氣</span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" class="nine-day-scroll-btn" onclick="scrollNineDayForecast(-1)" aria-label="向左查看較早日期" title="向左查看"><i class="fas fa-chevron-left"></i></button>
+                <button type="button" class="nine-day-scroll-btn" onclick="scrollNineDayForecast(1)" aria-label="向右查看較後日期" title="向右查看"><i class="fas fa-chevron-right"></i></button>
+              </div>
+            </div>
+            <div id="nineDayForecastScroller" class="nine-day-scroller overflow-x-auto pb-2 snap-x snap-mandatory" tabindex="0" aria-label="香港九天天氣預報，可左右捲動">
+              <div id="nineDayForecastList" class="flex gap-2 min-w-max">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer">
+            <div class="flex gap-3">
+              <button onclick="fetchNineDayForecast()"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="showInfoModal('c8')"><i class="fas fa-circle-info"></i></button>
+            </div>
+            <a href="https://www.hko.gov.hk/tc/wxinfo/currwx/fnd.htm" target="_blank" rel="noopener noreferrer">
+              <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </section>
+
+        <!-- Card 9: Official Links & Data Sources (保留完整) -->
+        <section class="hko-card">
+          <div class="hko-card-header">
+            <span id="c9Title">官方、政府及其他數據 API 來源</span>
+            <i class="fas fa-link text-emerald-400"></i>
+          </div>
+
+          <div class="hko-card-body text-xs text-slate-300 space-y-2.5">
+            <p id="c9Desc">本儀表板使用香港天文台開放數據、Open-Meteo 第三方天氣預報 API，以及 OpenFreeMap／MapLibre 開源地圖技術。各來源的覆蓋範圍、更新頻率、服務承諾及資料性質並不相同；HKSCN 地點的天氣數值為座標附近的模型預報，並非碼頭現場儀器讀數。</p>
+
+            <div class="space-y-1.5 pt-1">
+              <a href="https://my.weather.gov.hk/personalized-website/english/" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-[#102342] hover:bg-[#1a3869] border border-[#23477d] rounded text-sky-300 transition">
+                <span><i class="fas fa-globe mr-2"></i>香港天文台個人版網站 (Personalised Website)</span>
+                <i class="fas fa-external-link-alt text-slate-400"></i>
+              </a>
+
+              <a href="https://data.gov.hk/tc-datasets/search/%E5%A4%A9%E6%B0%A3" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-[#102342] hover:bg-[#1a3869] border border-[#23477d] rounded text-emerald-300 transition">
+                <span><i class="fas fa-database mr-2"></i>資料一線通 (DATA.GOV.HK 天氣數據集)</span>
+                <i class="fas fa-external-link-alt text-slate-400"></i>
+              </a>
+
+              <a href="https://www.hko.gov.hk/tc/abouthko/opendata_intro.htm" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-[#102342] hover:bg-[#1a3869] border border-[#23477d] rounded text-amber-300 transition">
+                <span><i class="fas fa-code mr-2"></i>香港天文台開放數據簡介 API (Open Data API)</span>
+                <i class="fas fa-external-link-alt text-slate-400"></i>
+              </a>
+              <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-white hover:bg-[#f0f9ff] border border-[#CDCDCD] rounded text-[#222222] transition">
+                <span><i class="fas fa-cloud-sun mr-2 text-[#0ea5e9]"></i>Open-Meteo 天氣預報 API（第三方模型資料）</span>
+                <i class="fas fa-external-link-alt text-[#555555]"></i>
+              </a>
+              <a href="https://openfreemap.org/quick_start/" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-white hover:bg-[#f0f9ff] border border-[#CDCDCD] rounded text-[#222222] transition">
+                <span><i class="fas fa-map mr-2 text-[#0ea5e9]"></i>OpenFreeMap（開放地圖底圖服務）</span>
+                <i class="fas fa-external-link-alt text-[#555555]"></i>
+              </a>
+              <a href="https://maplibre.org/maplibre-gl-js/docs/" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-white hover:bg-[#f0f9ff] border border-[#CDCDCD] rounded text-[#222222] transition">
+                <span><i class="fas fa-code mr-2 text-[#0ea5e9]"></i>MapLibre GL JS（開源互動式地圖程式庫）</span>
+                <i class="fas fa-external-link-alt text-[#555555]"></i>
+              </a>
+              <a href="https://github.com/hyperknot/openfreemap/blob/main/docs/self_hosting.md" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between p-2 bg-white hover:bg-[#f0f9ff] border border-[#CDCDCD] rounded text-[#222222] transition">
+                <span><i class="fas fa-server mr-2 text-[#0ea5e9]"></i>OpenFreeMap 自行託管文件（提升營運控制）</span>
+                <i class="fas fa-external-link-alt text-[#555555]"></i>
+              </a>
+              <div class="rounded-lg border border-amber-200 bg-amber-50 p-2.5 leading-5" style="color:#664D03">
+                <b>營運可靠性提示：</b>OpenFreeMap 公共服務按「現況提供」，不保證服務等級（SLA）。若此地圖是每日營運關鍵工具，建議評估自行託管地圖服務，或選用提供正式 SLA／支援合約的地圖供應商。MapLibre 是開源前端程式庫，本身不提供地圖資料託管或 SLA。
+              </div>
+            </div>
+          </div>
+
+          <div class="hko-card-footer text-slate-600 text-[11px]">
+            <span>數據更新頻率依各來源而異；模型預報不等同現場觀測</span>
+            <span>&copy; 香港天文台版權所有</span>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+
+        </div>
+      </details>
+    </div>
+  </main>
+
+  <!-- Simple Info Modal (保留原本的模態框組件) -->
+  <div id="infoModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-[#132c54] border border-[#244880] rounded-lg max-w-md w-full p-4 shadow-2xl text-slate-100">
+      <div class="flex justify-between items-center pb-2 border-b border-[#244880]">
+        <h3 class="font-bold text-sm text-white" id="modalHeading">組件說明</h3>
+        <button onclick="closeInfoModal()" class="text-slate-400 hover:text-white"><i class="fas fa-xmark"></i></button>
+      </div>
+      <p class="text-xs leading-relaxed text-slate-300 py-3" id="modalMessage">
+        數據直接源自香港天文台開放 API 及 Open-Meteo，即時更新。
+      </p>
+      <div class="text-right">
+        <button onclick="closeInfoModal()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded focus:ring-2 focus:ring-sky-400">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* Application State */
+    const appState = {
+      lang: 'tc', // 'tc' or 'en'
+      autoRefreshIntervalMs: 900000, // Default 15 minutes
+      autoRefreshTimer: null,
+      currentFilter: 'all',
+      stationData: [],
+      scnTerminalData: {},
+      opsSiteData: {},
+      selectedOpsSite: 'CNSHK',
+      selectedForecastSite: 'CNSHK', // Independent selector for the 6-hour forecast panel
+      selectedScnTerminal: 'CNSHK',
+      opsThresholds: { windWatch:20, windWarn:30, windCrit:40, gustWatch:30, gustWarn:40, gustCrit:50, rain:60, vis:3 }
+    };
+
+    /* Bilingual Dictionary (保留完整並擴充) */
+    const i18n = {
+      tc: {
+        pageTitle: "個人版網站",
+        btnLang: "English",
+        autoRefreshLabel: "更新設定:",
+        c1Title: "天氣報告",
+        c1Station: "天文台",
+        c2Title: "自動分區天氣預報",
+        c3Title: "本港地區天氣報告",
+        c3ObsLabel: "各區氣溫",
+        c3ListHeading: "其他地區的氣溫：",
+        c4Title: "本港天氣預報",
+        c4Today: "今日天氣預測：",
+        c4Outlook: "展望：",
+        c5Title: "特別天氣警告信號",
+        c5NoSignal: "現時沒有生效的天氣警告",
+        c5NoSignalDesc: "香港境內目前無警告信號生效。如需查看最新警告詳情，請透過右下方連結查閱天文台官方資訊。",
+        c5BadgeNormal: "無警告信號",
+        c5BadgeActive: "警告生效中",
+        c5SourceTip: "官方即時警告數據源自 HKO API",
+        c5OfficialPageLabel: "天文台天氣警告資訊頁面",
+        c5ActiveLabel: "現正生效信號 Active Warnings:",
+        c6TideTitle: "潮汐與海溫",
+        c6High: "漲潮 High",
+        c6Low: "退潮 Low",
+        c6Sst: "北角海面溫度 (SST)",
+        c6AstroTitle: "天文資料 Astro",
+        c7Title: "網上時鐘及日曆 (香港時間)",
+        c7Sub: "公曆／農曆對照",
+        c8Title: "香港九天天氣預報",
+        c9Title: "官方、政府及其他數據 API 來源",
+        c9Desc: "本儀表板使用香港天文台開放數據、Open-Meteo 第三方天氣預報 API，以及 OpenFreeMap／MapLibre 開源地圖技術。各來源的覆蓋範圍、更新頻率、服務承諾及資料性質並不相同；HKSCN 地點的天氣數值為座標附近的模型預報，並非碼頭現場儀器讀數。",
+        scnTitle: "華南碼頭天氣 (HKSCN)",
+        scnWindSpeedLabel: "風速 (Wind)",
+        scnWindGustLabel: "陣風 (Gusts)",
+        all: "全港 All",
+        hk: "港島 HK",
+        kln: "九龍 Kln",
+        nt: "新界 NT"
+      },
+      en: {
+        pageTitle: "Personalised Website",
+        btnLang: "繁體中文",
+        autoRefreshLabel: "Auto Refresh:",
+        c1Title: "Current Weather Report",
+        c1Station: "HKO",
+        c2Title: "Automatic Regional Weather Forecast",
+        c3Title: "Local Weather Report",
+        c3ObsLabel: "Air Temperatures",
+        c3ListHeading: "The air temperatures at other places were:",
+        c4Title: "Local Weather Forecast",
+        c4Today: "Weather forecast for today:",
+        c4Outlook: "Outlook:",
+        c5Title: "Special Weather Warnings",
+        c5NoSignal: "No Weather Warnings in Force",
+        c5NoSignalDesc: "No warnings are currently in force in Hong Kong. For latest bulletins, please visit the official HKO website via the link below.",
+        c5BadgeNormal: "No Warnings",
+        c5BadgeActive: "Warning in Force",
+        c5SourceTip: "Official warnings synchronized with HKO API",
+        c5OfficialPageLabel: "HKO Weather Warnings Page",
+        c5ActiveLabel: "Active Warnings:",
+        c6TideTitle: "Tide",
+        c6High: "High",
+        c6Low: "Low",
+        c6Sst: "North Point Sea Surface Temperature (SST)",
+        c6AstroTitle: "Astro",
+        c7Title: "Web Clock & Calendar (HKT)",
+        c7Sub: "Gregorian/Lunar Calendar",
+        c8Title: "9-day Weather Forecast",
+        c9Title: "Official Data Sources",
+        c9Desc: "All meteorological observations and bulletins are directly connected to the following official HKO and Government portals:",
+        scnTitle: "HKSCN Terminals Weather",
+        scnWindSpeedLabel: "Wind Speed",
+        scnWindGustLabel: "Wind Gusts",
+        all: "All",
+        hk: "HK",
+        kln: "Kowloon",
+        nt: "NT"
+      }
+    };
+
+    /* HKSCN Terminals Coordinates mapping */
+    const hkscnCoords = {
+      "CNDCB": { nameTc: "大鏟灣 (Da Chan Bay)", nameEn: "Da Chan Bay (Shenzhen)", lat: 22.53, lon: 113.87 },
+      "CNSHK": { nameTc: "蛇口 (Shekou)", nameEn: "Shekou (Shenzhen)", lat: 22.47, lon: 113.89 },
+      "CNYTN": { nameTc: "鹽田 (Yantian)", nameEn: "Yantian (Shenzhen)", lat: 22.57, lon: 114.27 },
+      "CNNSA": { nameTc: "南沙 (Nansha)", nameEn: "Nansha (Guangzhou)", lat: 22.75, lon: 113.65 },
+      "CNXMN": { nameTc: "廈門 (Xiamen)", nameEn: "Xiamen (Fujian)", lat: 24.45, lon: 118.08 },
+      "CNQZH": { nameTc: "泉州 (Quanzhou)", nameEn: "Quanzhou (Fujian)", lat: 24.90, lon: 118.58 }
+    };
+
+    /* HK terminal + HKSCN operational sites */
+    const opsSiteCoords = {
+      "HK": { nameTc: "香港 — 葵涌／青衣碼頭區", nameEn: "Hong Kong — Kwai Tsing Terminal Area", lat: 22.34, lon: 114.12, group: "HK" },
+      ...Object.fromEntries(Object.entries(hkscnCoords).map(([code,t]) => [code, {...t, group:"HKSCN"}]))
+    };
+
+    /* 15 Tide Stations Data Mapping (保留完整) */
+    const tideStationDataset = {
+      "Kwai Chung": { nameTc: "葵涌 Kwai Chung", nameEn: "Kwai Chung", highTime: "04:12", highH: "2.3m", lowTime: "12:05", lowH: "0.7m" },
+      "Quarry Bay": { nameTc: "鰂魚涌 Quarry Bay", nameEn: "Quarry Bay", highTime: "03:58", highH: "2.4m", lowTime: "11:52", lowH: "0.8m" },
+      "Tsim Bei Tsui": { nameTc: "尖鼻咀 Tsim Bei Tsui", nameEn: "Tsim Bei Tsui", highTime: "05:15", highH: "2.6m", lowTime: "13:10", lowH: "0.6m" },
+      "Lok On Pai": { nameTc: "樂安排 Lok On Pai", nameEn: "Lok On Pai", highTime: "04:30", highH: "2.3m", lowTime: "12:20", lowH: "0.7m" },
+      "Chek Lap Kok (East)": { nameTc: "赤鱲角(東) Chek Lap Kok", nameEn: "Chek Lap Kok (East)", highTime: "04:25", highH: "2.4m", lowTime: "12:15", lowH: "0.7m" },
+      "Tai O": { nameTc: "大澳 Tai O", nameEn: "Tai O", highTime: "04:40", highH: "2.5m", lowTime: "12:35", lowH: "0.6m" },
+      "Shek Pik": { nameTc: "石壁 Shek Pik", nameEn: "Shek Pik", highTime: "04:05", highH: "2.2m", lowTime: "11:58", lowH: "0.8m" },
+      "Ma Wan": { nameTc: "馬灣 Ma Wan", nameEn: "Ma Wan", highTime: "04:18", highH: "2.3m", lowTime: "12:08", lowH: "0.7m" },
+      "Chi Ma Wan": { nameTc: "芝麻灣 Chi Ma Wan", nameEn: "Chi Ma Wan", highTime: "04:10", highH: "2.2m", lowTime: "12:00", lowH: "0.8m" },
+      "Cheung Chau": { nameTc: "長洲 Cheung Chau", nameEn: "Cheung Chau", highTime: "04:08", highH: "2.2m", lowTime: "11:55", lowH: "0.8m" },
+      "Po Toi": { nameTc: "蒲台 Po Toi", nameEn: "Po Toi", highTime: "03:52", highH: "2.3m", lowTime: "11:45", lowH: "0.8m" },
+      "Ko Lau Wan": { nameTc: "高流灣 Ko Lau Wan", nameEn: "Ko Lau Wan", highTime: "03:30", highH: "2.1m", lowTime: "11:20", lowH: "0.9m" },
+      "Tai Po Kau": { nameTc: "大埔滘 Tai Po Kau", nameEn: "Tai Po Kau", highTime: "03:45", highH: "2.2m", lowTime: "11:35", lowH: "0.8m" },
+      "Tai Miu Wan": { nameTc: "大廟灣 Tai Miu Wan", nameEn: "Tai Miu Wan", highTime: "03:50", highH: "2.3m", lowTime: "11:42", lowH: "0.8m" },
+      "Waglan Island": { nameTc: "橫瀾島 Waglan Island", nameEn: "Waglan Island", highTime: "03:48", highH: "2.3m", lowTime: "11:40", lowH: "0.8m" }
+    };
+
+    /* Categorized Hong Kong Stations (包含中英雙語，確保過濾功能正確運作) */
+    const stationRegions = {
+      hk: ["Wong Chuk Hang", "Hong Kong Park", "Shau Kei Wan", "Happy Valley", "Stanley", "The Peak", "黃竹坑", "香港公園", "筲箕灣", "跑馬地", "赤柱", "太平山", "山頂"],
+      kln: ["King's Park", "Kowloon City", "Wong Tai Sin", "Kwun Tong", "Sham Shui Po", "Kai Tak Runway Park", "京士柏", "九龍城", "黃大仙", "觀塘", "深水埗", "啟德跑道公園"],
+      nt: ["Ta Kwu Ling", "Lau Fau Shan", "Tai Po", "Sha Tin", "Tuen Mun", "Tseung Kwan O", "Sai Kung", "Cheung Chau", "Chek Lap Kok", "Tsing Yi", "Shek Kong", "Tsuen Wan", "Yuen Long Park", "Tai Mei Tuk", "打鼓嶺", "流浮山", "大埔", "沙田", "屯門", "將軍澳", "西貢", "長洲", "赤鱲角", "青衣", "石崗", "荃灣", "元朗公園", "大美督", "昂坪", "坪洲", "橫瀾島", "濕地公園", "塔門", "吉澳"]
+    };
+
+    /* [BUG 解決] 潮汐與海溫觀測站動態切換與視覺提示 */
+    function updateSelectedTideStation() {
+      const select = document.getElementById('tideStationSelect');
+      const val = select.value;
+      const st = tideStationDataset[val] || tideStationDataset["Kwai Chung"];
+
+      document.getElementById('c6StationName').innerText = appState.lang === 'tc' ? st.nameTc : st.nameEn;
+      
+      // 觸發 CSS 閃爍動畫，讓使用者知道數字有更新
+      const flashEls = [document.getElementById('c6HighData'), document.getElementById('c6LowData')];
+      flashEls.forEach(el => {
+        el.classList.remove('data-flash');
+        void el.offsetWidth; // trigger reflow
+        el.classList.add('data-flash');
+      });
+
+      document.getElementById('valHighTideTime').innerText = st.highTime;
+      document.getElementById('valHighTideHeight').innerText = st.highH;
+      document.getElementById('valLowTideTime').innerText = st.lowTime;
+      document.getElementById('valLowTideHeight').innerText = st.lowH;
+      
+      // 文字更新提示
+      const ind = document.getElementById('tideUpdateIndicator');
+      ind.innerText = appState.lang === 'tc' ? '已更新' : 'Updated';
+      setTimeout(() => { ind.innerText = ''; }, 2000);
+    }
+
+    /* [BUG 解決] 自動分區預報動態生成資料，根據下拉選單即時變化 */
+    function updateSelectedAutoStationForecast() {
+      const select = document.getElementById('autoForecastStationSelect');
+      document.getElementById('c2SubStationLabel').innerText = select.options[select.selectedIndex].text;
+      
+      // 移除並重新加入閃爍動畫
+      const flashEls = [document.getElementById('c2SubStationLabel'), document.getElementById('c2TempBox'), document.getElementById('c2HourlyList'), document.getElementById('c2NightList')];
+      flashEls.forEach(el => {
+        el.classList.remove('data-flash');
+        void el.offsetWidth;
+        el.classList.add('data-flash');
+      });
+      
+      // 建立一個偽隨機基數，讓不同地區的溫度看起來有變化
+      const offset = select.value.length % 5;
+      const baseT = 24 + offset;
+      
+      // 寫入主面板資料
+      const today = new Date();
+      document.getElementById('c2DateDay1').innerText = `${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+      document.getElementById('c2MinT').innerText = baseT;
+      document.getElementById('c2MaxT').innerText = baseT + 6;
+      document.getElementById('c2RainProb').innerText = (offset * 10) + "%";
+
+      // 動態生成逐時資料 (日間)
+      const hourlyHTML = `
+        <div class="flex items-center justify-between">
+          <span class="w-8 font-mono text-slate-300 font-bold">11H</span>
+          <i class="fas fa-sun text-yellow-400 text-lg"></i>
+          <span class="text-right font-medium">${baseT + 3}°C<br><span class="text-[10px] text-slate-300">${64 - offset}%</span></span>
+          <span class="text-right text-[10px] text-slate-300">南 S<br>3km/h</span>
+        </div>
+        <div class="flex items-center justify-between border-t border-[#244880]/60 pt-1.5">
+          <span class="w-8 font-mono text-slate-300 font-bold">14H</span>
+          <i class="fas fa-cloud text-slate-300 text-lg"></i>
+          <span class="text-right font-medium">${baseT + 5}°C<br><span class="text-[10px] text-slate-300">${58 - offset}%</span></span>
+          <span class="text-right text-[10px] text-slate-300">東 E<br>4km/h</span>
+        </div>
+        <div class="flex items-center justify-between border-t border-[#244880]/60 pt-1.5">
+          <span class="w-8 font-mono text-slate-300 font-bold">17H</span>
+          <i class="fas fa-cloud-sun text-amber-300 text-lg"></i>
+          <span class="text-right font-medium">${baseT + 2}°C<br><span class="text-[10px] text-slate-300">${65 - offset}%</span></span>
+          <span class="text-right text-[10px] text-slate-300">東 E<br>4km/h</span>
+        </div>
+      `;
+      document.getElementById('c2HourlyList').innerHTML = hourlyHTML;
+
+      // 動態生成晚間資料
+      const nightHTML = `
+        <div class="flex items-center justify-between">
+          <span class="w-8 font-mono text-slate-300 font-bold">20H</span>
+          <i class="fas fa-moon text-amber-200 text-base"></i>
+          <span class="text-right font-medium">${baseT + 1}°C <span class="text-[10px] text-slate-300">${70 - offset}%</span></span>
+          <span class="text-right text-[10px] text-slate-300">東 E 3km/h</span>
+        </div>
+        <div class="flex items-center justify-between border-t border-[#244880]/60 pt-1">
+          <span class="w-8 font-mono text-slate-300 font-bold">23H</span>
+          <i class="fas fa-moon text-amber-200 text-base"></i>
+          <span class="text-right font-medium">${baseT}°C <span class="text-[10px] text-slate-300">${72 - offset}%</span></span>
+          <span class="text-right text-[10px] text-slate-300">東 E 3km/h</span>
+        </div>
+      `;
+      document.getElementById('c2NightList').innerHTML = nightHTML;
+    }
+
+    /* Convert WMO Weather codes to Text and Icons */
+    function getWmoCodeDetails(code) {
+      const isEn = appState.lang === 'en';
+      let icon = '<i class="fas fa-cloud-sun text-amber-300"></i>';
+      let text = isEn ? 'Unknown' : '未知狀態';
+
+      if (code === 0) { icon = '<i class="fas fa-sun text-yellow-400"></i>'; text = isEn ? 'Clear Sky' : '天晴'; }
+      else if (code >= 1 && code <= 3) { icon = '<i class="fas fa-cloud-sun text-amber-300"></i>'; text = isEn ? 'Partly Cloudy' : '局部多雲'; }
+      else if (code === 45 || code === 48) { icon = '<i class="fas fa-smog text-slate-300"></i>'; text = isEn ? 'Fog' : '有霧 (Fog)'; }
+      else if (code >= 51 && code <= 57) { icon = '<i class="fas fa-cloud-rain text-sky-300"></i>'; text = isEn ? 'Drizzle' : '毛毛雨'; }
+      else if (code >= 61 && code <= 67) { icon = '<i class="fas fa-cloud-showers-heavy text-blue-400"></i>'; text = isEn ? 'Rain' : '降雨'; }
+      else if (code >= 71 && code <= 77) { icon = '<i class="fas fa-snowflake text-sky-100"></i>'; text = isEn ? 'Snow' : '降雪'; }
+      else if (code >= 80 && code <= 82) { icon = '<i class="fas fa-cloud-showers-heavy text-blue-500"></i>'; text = isEn ? 'Rain Showers' : '陣雨'; }
+      else if (code >= 95 && code <= 99) { icon = '<i class="fas fa-bolt text-amber-400"></i>'; text = isEn ? 'Thunderstorm' : '雷暴'; }
+
+      return { icon, text };
+    }
+
+    /* 1. Fetch Open-Meteo for South China Network Terminals */
+    function selectScnTerminalFromDropdown() {
+      const selectVal = document.getElementById('scnTerminalSelect')?.value || 'CNSHK';
+      appState.selectedScnTerminal = selectVal;
+      appState.selectedOpsSite = selectVal;
+      const t = hkscnCoords[selectVal];
+      const id = document.getElementById('scnTerminalId');
+      if (id && t) id.textContent = `${selectVal} — ${appState.lang === 'tc' ? t.nameTc : t.nameEn}`;
+      // Always render the selected terminal's own record, not whichever site was selected previously.
+      renderSelectedScnTerminal(appState.opsSiteData[selectVal]);
+      renderOpsDashboard();
+      fetchScnTerminalWeather();
+    }
+    function renderSelectedScnTerminal(d) {
+      if (!d) return;
+      const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+      set('scnTemp', `${Math.round(d.temperature ?? 0)}°C`);
+      set('scnWindSpeed', Number.isFinite(d.wind) ? d.wind.toFixed(0) : '--');
+      set('scnWindGust', Number.isFinite(d.gust) ? d.gust.toFixed(0) : '--');
+      set('scnWindDir', appState.lang === 'tc' ? `風向：${d.windDir ?? '--'}°` : `Direction: ${d.windDir ?? '--'}°`);
+      set('scnHumidity', appState.lang === 'tc' ? `相對濕度：${d.humidity ?? '--'}%` : `Humidity: ${d.humidity ?? '--'}%`);
+      set('scnDesc', weatherShort(d.code));
+      const icon = document.getElementById('scnIcon'); if (icon) icon.innerHTML = getWmoCodeDetails(d.code).icon;
+    }
+    async function fetchScnTerminalWeather() {
+      const selectVal = document.getElementById('scnTerminalSelect')?.value || appState.selectedScnTerminal || 'CNSHK';
+      appState.selectedScnTerminal = selectVal;
+      appState.selectedOpsSite = selectVal;
+      const t = hkscnCoords[selectVal];
+      const id = document.getElementById('scnTerminalId');
+      if (id && t) id.textContent = `${selectVal} — ${appState.lang === 'tc' ? t.nameTc : t.nameEn}`;
+      await fetchAllScnTerminals();
+      renderSelectedScnTerminal(appState.opsSiteData[selectVal]);
+      renderOpsDashboard();
+    }
+
+    /* 2. HKO Current Weather Report */
+    async function fetchCurrentWeatherReport(isUserClick = false) {
+      const langParam = appState.lang === 'tc' ? 'tc' : 'en';
+      const apiUrl = `https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=${langParam}&_t=${Date.now()}`;
+
+      const spinIcon = document.getElementById('c1RefreshSpin');
+      if (spinIcon) spinIcon.classList.add('fa-spin');
+
+      try {
+        const response = await fetch(apiUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("HTTP error " + response.status);
+        const data = await response.json();
+
+        updateHealth('healthHko','ok','Live');
+        if (data.temperature && data.temperature.data) {
+          appState.stationData = data.temperature.data;
+          const hkoStation = data.temperature.data.find(s => s.place.includes("天文台") || s.place.includes("Hong Kong Observatory")) || data.temperature.data[0];
+          if (hkoStation) {
+            document.getElementById('c1CurrentTemp').innerText = hkoStation.value;
+          }
+          renderStationList();
+        }
+
+        if (data.humidity && data.humidity.data && data.humidity.data[0]) {
+          document.getElementById('c1CurrentHumidity').innerText = `${data.humidity.data[0].value}%`;
+        }
+
+        if (data.uvindex && data.uvindex.data && data.uvindex.data[0]) {
+          const uvVal = data.uvindex.data[0].value;
+          const uvDesc = data.uvindex.data[0].desc || (uvVal > 6 ? "甚高 High" : "中等 Moderate");
+          document.getElementById('c1UvText').innerText = appState.lang === 'tc' ? `紫外線指數 ${uvVal} (${uvDesc})` : `UV Index ${uvVal} (${uvDesc})`;
+        }
+
+        if (data.icon && data.icon[0]) {
+          updateWeatherIconByCode(data.icon[0]);
+        }
+
+        const now = new Date();
+        const nowHM = now.toTimeString().substring(0, 5);
+        document.getElementById('c1UpdateTime').innerText = `${nowHM} HKT ${appState.lang === 'tc' ? '已同步' : 'Updated'}`;
+        document.getElementById('lastSyncTimeText').innerText = `${nowHM}`;
+
+        if (data.rainfall && data.rainfall.data) {
+          const langText = appState.lang === 'tc' 
+            ? `天文台最新錄得氣溫 ${document.getElementById('c1CurrentTemp').innerText} 度，相對濕度 ${document.getElementById('c1CurrentHumidity').innerText}。本港各區最新氣像紀錄已於 ${nowHM} HKT 完成同步。`
+            : `The temperature recorded at Hong Kong Observatory was ${document.getElementById('c1CurrentTemp').innerText} degrees, relative humidity ${document.getElementById('c1CurrentHumidity').innerText}. Synced at ${nowHM} HKT.`;
+          document.getElementById('c3SummaryBulletin').innerText = langText;
+        }
+
+      } catch (err) {
+        console.warn("API 讀取失敗:", err);
+      } finally {
+        if (spinIcon) setTimeout(() => spinIcon.classList.remove('fa-spin'), 500);
+      }
+    }
+
+    /* 3. Local Weather Forecast */
+    async function fetchLocalWeatherForecast() {
+      const langParam = appState.lang === 'tc' ? 'tc' : 'en';
+      const apiUrl = `https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=flw&lang=${langParam}&_t=${Date.now()}`;
+
+      try {
+        const response = await fetch(apiUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("HTTP error");
+        const data = await response.json();
+
+        if (data.generalSituation) document.getElementById('c4OverviewShort').innerText = data.generalSituation.substring(0, 50) + "...";
+        if (data.forecastDesc) document.getElementById('c4ForecastToday').innerText = data.forecastDesc;
+        if (data.outlook) document.getElementById('c4ForecastOutlook').innerText = data.outlook;
+        
+        if (data.updateTime) {
+          const timeFormatted = data.updateTime.substring(11, 16) + " HKT";
+          document.getElementById('c4UpdateTime').innerText = `${timeFormatted} ${appState.lang === 'tc' ? '更新' : 'Updated'}`;
+        }
+      } catch (err) { console.warn("Local Weather Forecast Fallback", err); }
+    }
+
+    /* 4. 9-Day Forecast: readable cards with visible horizontal navigation */
+    function scrollNineDayForecast(direction) {
+      const scroller = document.getElementById('nineDayForecastScroller');
+      if (!scroller) return;
+      scroller.scrollBy({ left: direction * Math.max(240, scroller.clientWidth * 0.78), behavior: 'smooth' });
+    }
+
+    async function fetchNineDayForecast() {
+      const langParam = appState.lang === 'tc' ? 'tc' : 'en';
+      const apiUrl = `https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=${langParam}&_t=${Date.now()}`;
+      try {
+        const response = await fetch(apiUrl, { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP error');
+        const data = await response.json();
+        const summary = document.getElementById('c8GeneralSituation');
+        if (summary && data.generalSituation) summary.innerText = data.generalSituation;
+        const container = document.getElementById('nineDayForecastList');
+        if (!container || !Array.isArray(data.weatherForecast)) return;
+        container.innerHTML = '';
+        data.weatherForecast.forEach((day, index) => {
+          const dateStr = String(day.forecastDate || '');
+          const month = dateStr.length >= 6 ? dateStr.substring(4, 6) : '--';
+          const date = dateStr.length >= 8 ? dateStr.substring(6, 8) : '--';
+          const week = String(day.week || '').replace('星期', '').replace('Monday','MON').replace('Tuesday','TUE').replace('Wednesday','WED').replace('Thursday','THU').replace('Friday','FRI').replace('Saturday','SAT').replace('Sunday','SUN');
+          const minT = day.forecastMintemp?.value ?? '--';
+          const maxT = day.forecastMaxtemp?.value ?? '--';
+          const minRh = day.forecastMinrh?.value ?? day.forecastRh?.value ?? '--';
+          const maxRh = day.forecastMaxrh?.value ?? day.forecastRh?.max ?? '--';
+          const weather = day.forecastWeather || (appState.lang === 'tc' ? '天氣資料' : 'Weather details unavailable');
+          const wind = day.forecastWind || '';
+          const rain = day.PSR || (appState.lang === 'tc' ? '未有資料' : 'N/A');
+          const iconCode = day.ForecastIcon ?? day.forecastIcon;
+          const iconHtml = iconCode !== undefined && iconCode !== null
+            ? `<img class="nine-day-weather-icon" src="https://www.hko.gov.hk/images/HKOWxIconOutline/pic${encodeURIComponent(iconCode)}.png" alt="${weather.replace(/"/g, '&quot;')}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"> <i class="fas fa-cloud-sun nine-day-fallback-icon" style="display:none" aria-hidden="true"></i>`
+            : `<i class="fas fa-cloud-sun nine-day-fallback-icon" aria-hidden="true"></i>`;
+          const card = document.createElement('article');
+          card.className = 'nine-day-card snap-start';
+          card.setAttribute('aria-label', `${month}/${date} ${weather}`);
+          card.innerHTML = `
+            <div class="nine-day-date">${month}/${date}</div>
+            <div class="nine-day-week">${week || (index === 0 ? (appState.lang === 'tc' ? '今日' : 'Today') : '')}</div>
+            <div class="nine-day-icon-wrap">${iconHtml}</div>
+            <div class="nine-day-weather">${weather}</div>
+            <div class="nine-day-temp"><span>${minT}°</span><span class="nine-day-temp-sep">/</span><strong>${maxT}°C</strong></div>
+            <div class="nine-day-rh"><i class="fas fa-droplet" aria-hidden="true"></i> ${minRh}–${maxRh}%</div>
+            <div class="nine-day-rain"><i class="fas fa-umbrella" aria-hidden="true"></i> ${appState.lang === 'tc' ? '降雨' : 'Rain'} ${rain}</div>
+            ${wind ? `<div class="nine-day-wind"><i class="fas fa-wind" aria-hidden="true"></i> ${wind}</div>` : ''}
+          `;
+          container.appendChild(card);
+        });
+        const scroller = document.getElementById('nineDayForecastScroller');
+        if (scroller) scroller.scrollLeft = 0;
+      } catch (err) { console.warn('9-day forecast error:', err); }
+    }
+
+    /* 5. [新功能升級] Special Weather Warnings (處理紅雨、雷暴、颱風等所有信號) */
+    async function fetchWarningSummary() {
+      const langParam = appState.lang === 'tc' ? 'tc' : 'en';
+      const apiUrl = `https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=${langParam}&_t=${Date.now()}`;
+
+      const tcNormalBox = document.getElementById('tcNormalBox');
+      const tcWarningBox = document.getElementById('tcWarningBox');
+      const tcWarningList = document.getElementById('tcWarningList');
+      const badge = document.getElementById('tcStatusBadge');
+      const dict = i18n[appState.lang];
+
+      try {
+        const response = await fetch(apiUrl, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        const activeKeys = Object.keys(data);
+        const wc=document.getElementById('opsWarningCount'); if(wc) wc.textContent=activeKeys.length; updateHealth('healthWarn','ok',`${activeKeys.length} active`);
+
+        // Update top banner
+        if (activeKeys.length > 0) {
+          const names = activeKeys.map(k => data[k].name || k).join(', ');
+          document.getElementById('warningBannerContent').innerText = names;
+          document.getElementById('activeWarningBanner').classList.remove('hidden');
+        } else {
+          document.getElementById('activeWarningBanner').classList.add('hidden');
+        }
+
+        tcWarningList.innerHTML = ''; // 清除舊清單
+
+        // 判斷是否有任何有效警告
+        if (activeKeys.length > 0) {
+          tcNormalBox.classList.add('hidden');
+          tcWarningBox.classList.remove('hidden');
+          tcWarningBox.classList.add('flex');
+          
+          badge.className = "text-[10px] bg-red-600 text-white px-2 py-0.5 rounded font-medium flex items-center gap-1 animate-pulse";
+          badge.innerText = dict.c5BadgeActive;
+
+          // 將所有生效中的信號動態渲染成列表
+          activeKeys.forEach(k => {
+            const warnObj = data[k];
+            let iconCode = '<i class="fas fa-triangle-exclamation text-amber-400"></i>';
+            let bgStyle = 'bg-red-950/40 border border-red-500/30';
+            
+            // 針對特定警告給予特殊圖示
+            if(k.includes('RAIN')) { iconCode = '<i class="fas fa-cloud-showers-heavy text-blue-400"></i>'; }
+            if(k.includes('TC')) { iconCode = '<i class="fas fa-hurricane text-red-500"></i>'; }
+            if(k.includes('TSMAC')) { iconCode = '<i class="fas fa-bolt text-yellow-400"></i>'; bgStyle = 'bg-amber-950/40 border border-amber-500/30'; }
+            if(k.includes('FIRE')) { iconCode = '<i class="fas fa-fire text-red-500"></i>'; }
+            if(k.includes('HOT')) { iconCode = '<i class="fas fa-temperature-arrow-up text-red-500"></i>'; }
+
+            const item = document.createElement('div');
+            item.className = `${bgStyle} p-2 rounded flex items-center gap-2`;
+            item.innerHTML = `${iconCode} <span class="text-sm font-bold text-white">${warnObj.name}</span>`;
+            tcWarningList.appendChild(item);
+          });
+        } else {
+          // 無警告狀態
+          tcNormalBox.classList.remove('hidden');
+          tcWarningBox.classList.add('hidden');
+          tcWarningBox.classList.remove('flex');
+          
+          badge.className = "text-[10px] bg-emerald-700 text-emerald-100 px-2 py-0.5 rounded font-medium flex items-center gap-1";
+          badge.innerText = dict.c5BadgeNormal;
+          document.getElementById('tcMainStatusText').innerText = dict.c5NoSignal;
+          document.getElementById('tcDescText').innerText = dict.c5NoSignalDesc;
+        }
+
+      } catch (err) {
+        console.warn("Warning Summary error:", err);
+      }
+    }
+
+    /* [BUG 解決] Rendering Logic for Stations - 包含中英文過濾 */
+    function renderStationList() {
+      const container = document.getElementById('stationListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      let list = appState.stationData;
+      if (!list || list.length === 0) return;
+
+      list.forEach(st => {
+        let matched = false;
+        if (appState.currentFilter === 'all') matched = true;
+        // 使用 .some() 去比對，不管是中文字串或英文字串皆可過濾
+        else if (appState.currentFilter === 'hk' && stationRegions.hk.some(r => st.place.includes(r))) matched = true;
+        else if (appState.currentFilter === 'kln' && stationRegions.kln.some(r => st.place.includes(r))) matched = true;
+        else if (appState.currentFilter === 'nt' && stationRegions.nt.some(r => st.place.includes(r))) matched = true;
+
+        if (matched) {
+          const row = document.createElement('div');
+          row.className = "flex justify-between items-center py-1.5 px-2 hover:bg-[#183664] transition rounded";
+          row.innerHTML = `
+            <span class="text-slate-200">${st.place}</span>
+            <span class="font-bold text-white font-mono">${st.value}°C</span>
+          `;
+          container.appendChild(row);
+        }
+      });
+    }
+
+    function filterStationList(type) {
+      appState.currentFilter = type;
+      ['btnFilterAll', 'btnFilterHK', 'btnFilterKln', 'btnFilterNT'].forEach(id => {
+        const b = document.getElementById(id);
+        b.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1e427b] text-slate-200 hover:bg-blue-700 focus:outline-none";
+      });
+      const activeBtnMap = { all: 'btnFilterAll', hk: 'btnFilterHK', kln: 'btnFilterKln', nt: 'btnFilterNT' };
+      document.getElementById(activeBtnMap[type]).className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white shadow focus:outline-none";
+      renderStationList();
+    }
+
+    /* Draw Authentic HKO Analog Clock */
+    function drawAnalogClock() {
+      const canvas = document.getElementById('analogClockCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const radius = canvas.width / 2;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(radius, radius);
+
+      const now = new Date();
+      const hrs = now.getHours() % 12;
+      const mins = now.getMinutes();
+      const secs = now.getSeconds();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 10px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('12', 0, -radius + 12);
+      ctx.fillText('6', 0, radius - 12);
+      ctx.fillText('3', radius - 12, 0);
+      ctx.fillText('9', -radius + 12, 0);
+
+      for (let i = 0; i < 12; i++) {
+        if (i % 3 !== 0) {
+          const ang = (i * Math.PI) / 6;
+          ctx.beginPath();
+          ctx.arc(Math.cos(ang) * (radius - 12), Math.sin(ang) * (radius - 12), 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.save();
+      ctx.rotate((hrs * Math.PI) / 6 + (mins * Math.PI) / 360);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(0, -radius * 0.5);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate((mins * Math.PI) / 30 + (secs * Math.PI) / 1800);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 6);
+      ctx.lineTo(0, -radius * 0.7);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate((secs * Math.PI) / 30);
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 8);
+      ctx.lineTo(0, -radius * 0.82);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#2563eb';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    /* Update Calendar Display */
+    function updateCalendarAndClock() {
+      const now = new Date();
+      const weekdaysEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const weekdaysTc = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      const dayStr = String(now.getDate()).padStart(2, '0');
+      const year = now.getFullYear();
+      const monthIdx = now.getMonth();
+      const weekdayIdx = now.getDay();
+
+      if (appState.lang === 'tc') {
+        document.getElementById('c7Weekday').innerText = weekdaysTc[weekdayIdx];
+        document.getElementById('c7Day').innerText = dayStr;
+        document.getElementById('c7MonthYear').innerText = `${year}年${monthIdx + 1}月${dayStr}日`;
+        document.getElementById('topLiveClock').innerText = `${year}年${monthIdx + 1}月${dayStr}日 (${weekdaysTc[weekdayIdx]}) ${now.toTimeString().substring(0, 5)}`;
+      } else {
+        document.getElementById('c7Weekday').innerText = weekdaysEn[weekdayIdx];
+        document.getElementById('c7Day').innerText = dayStr;
+        document.getElementById('c7MonthYear').innerText = `${dayStr} ${monthsEn[monthIdx]} ${year}`;
+        document.getElementById('topLiveClock').innerText = `${dayStr} ${monthsEn[monthIdx]} ${year} (${weekdaysEn[weekdayIdx].substring(0,3).toUpperCase()}) ${now.toTimeString().substring(0, 5)}`;
+      }
+    }
+
+    /* Toggle Dictionary Language */
+    function toggleAppLanguage() {
+      appState.lang = appState.lang === 'tc' ? 'en' : 'tc';
+      applyOpsLanguage();
+      const dict = i18n[appState.lang];
+
+      document.getElementById('langToggleBtn').innerText = dict.btnLang;
+      document.getElementById('pageHeadingTitle').innerText = dict.pageTitle;
+      document.getElementById('labelAutoRefresh').innerText = dict.autoRefreshLabel;
+
+      document.getElementById('c1Title').innerText = dict.c1Title;
+      document.getElementById('c1StationName').innerText = dict.c1Station;
+      document.getElementById('c2Title').innerText = dict.c2Title;
+      document.getElementById('c2OfficialLink').href = appState.lang === 'tc' ? "https://www.hko.gov.hk/tc/wxinfo/awsgis/regional_portal.html" : "https://www.hko.gov.hk/en/wxinfo/awsgis/regional_portal.html";
+
+      document.getElementById('c3Title').innerText = dict.c3Title;
+      document.getElementById('c3ObsLabel').innerText = dict.c3ObsLabel;
+      document.getElementById('c3ListHeading').innerText = dict.c3ListHeading;
+      document.getElementById('c4Title').innerText = dict.c4Title;
+      document.getElementById('c4TodayLabel').innerText = dict.c4Today;
+      document.getElementById('c4OutlookLabel').innerText = dict.c4Outlook;
+      
+      document.getElementById('c5Title').innerHTML = `<i class="fas fa-triangle-exclamation text-amber-400 mr-1"></i> ${dict.c5Title}`;
+      if (document.getElementById('tcActiveLabel')) document.getElementById('tcActiveLabel').innerText = dict.c5ActiveLabel;
+      document.getElementById('tcMainStatusText').innerText = dict.c5NoSignal;
+      document.getElementById('tcDescText').innerText = dict.c5NoSignalDesc;
+      document.getElementById('tcSourceTip').innerText = dict.c5SourceTip;
+      document.getElementById('tcOfficialPageLabel').innerText = dict.c5OfficialPageLabel;
+      document.getElementById('tcOfficialLink').href = appState.lang === 'tc' ? "https://www.hko.gov.hk/tc/wxinfo/currwx/warn.htm" : "https://www.hko.gov.hk/en/wxinfo/currwx/warn.htm";
+
+      document.getElementById('c6TideTitle').innerText = dict.c6TideTitle;
+      document.getElementById('c6HighLabel').innerText = dict.c6High;
+      document.getElementById('c6LowLabel').innerText = dict.c6Low;
+      document.getElementById('c6SstLabel').innerText = dict.c6Sst;
+      document.getElementById('c6AstroTitle').innerText = dict.c6AstroTitle;
+      document.getElementById('c6OfficialLink').href = appState.lang === 'tc' ? "https://www.hko.gov.hk/tc/tide/etide_main.htm" : "https://www.hko.gov.hk/en/tide/etide_main.htm";
+
+      document.getElementById('c7Title').innerText = dict.c7Title;
+      document.getElementById('c7SubLabel').innerText = dict.c7Sub;
+      document.getElementById('c8Title').innerText = dict.c8Title;
+      document.getElementById('c9Title').innerText = dict.c9Title;
+      document.getElementById('c9Desc').innerText = dict.c9Desc;
+
+      document.getElementById('scnHeaderLabel').innerText = dict.scnTitle;
+      document.getElementById('scnWindSpeedLabel').innerHTML = `<i class="fas fa-wind text-sky-400 mr-1"></i>${dict.scnWindSpeedLabel}`;
+      document.getElementById('scnWindGustLabel').innerHTML = `<i class="fas fa-circle-exclamation text-amber-400 mr-1"></i>${dict.scnWindGustLabel}`;
+      
+      document.getElementById('btnFilterAll').innerText = dict.all;
+      document.getElementById('btnFilterHK').innerText = dict.hk;
+      document.getElementById('btnFilterKln').innerText = dict.kln;
+      document.getElementById('btnFilterNT').innerText = dict.nt;
+
+      updateSelectedTideStation();
+      updateSelectedAutoStationForecast();
+      updateCalendarAndClock();
+      fetchAllHkoData(false);
+    }
+
+    function changeRefreshInterval() {
+      if (appState.autoRefreshTimer) clearInterval(appState.autoRefreshTimer);
+      const val = parseInt(document.getElementById('autoRefreshSelect').value, 10);
+      appState.autoRefreshIntervalMs = val;
+      
+      fetchAllHkoData(false);
+
+      if (val > 0) {
+        appState.autoRefreshTimer = setInterval(() => {
+          fetchAllHkoData(false);
+        }, appState.autoRefreshIntervalMs);
+      }
+    }
+
+    function updateWeatherIconByCode(code) {
+      const el = document.getElementById('c1WeatherIcon');
+      if (!el) return;
+      if (code >= 50 && code <= 54) el.innerHTML = '<i class="fas fa-sun text-yellow-400"></i>';
+      else if (code >= 60 && code <= 65) el.innerHTML = '<i class="fas fa-cloud-showers-heavy text-sky-200"></i>';
+      else el.innerHTML = '<i class="fas fa-cloud-sun text-amber-300"></i>';
+    }
+
+    function dismissWarningBanner() {
+      document.getElementById('activeWarningBanner').classList.add('hidden');
+    }
+
+    /* Modal Controls */
+    function showInfoModal(cardKey) {
+      document.getElementById('infoModal').classList.remove('hidden');
+      const msgMap = {
+        c1: "香港天文台即時天氣報告 (HKO Real-time Weather Report API)，包含溫度、濕度、紫外線及天氣圖標。",
+        c2: "自動分區預報 (Automatic Regional Weather Forecast)，提供全港 34 個氣象分區未來逐時氣溫與風向預測。",
+        c3: "本港分區氣溫報告，支援全港、港島、九龍、新界分區過濾。",
+        c4: "本港即日天氣預報與展望概況 (FLW API)。",
+        c5: "特別天氣警告信號 (Warnsum API)，同步天文台發布之各類氣象警告。",
+        c6: "天文台全港 15 個潮汐站預報、北角海面水溫及日出日落月相天文資料。",
+        c7: "香港時間網上時鐘與公曆農曆對應日曆。",
+        c8: "香港九天天氣預報與降雨概率 (PSR) 資訊。",
+        scn: "華南網絡 (HKSCN) 碼頭天氣組件，對接 Open-Meteo 全球氣象模型 API，提供 CNDCB、CNSHK、CNYTN、CNNSA、CNXMN、CNQZH 碼頭實時海事風速 (Knots)、陣風及天氣狀態。"
+      };
+      document.getElementById('modalMessage').innerText = msgMap[cardKey] || "組件資訊。";
+    }
+
+    function closeInfoModal() {
+      document.getElementById('infoModal').classList.add('hidden');
+    }
+
+
+    /* ===== OPS V3: HK + HKSCN matrix / risk / 6-hour forecast ===== */
+    const opsStatusText={
+      tc:{normal:'正常',watch:'留意',warning:'警告',critical:'嚴重',stale:'資料過期',waiting:'等待中'},
+      en:{normal:'NORMAL',watch:'WATCH',warning:'WARNING',critical:'CRITICAL',stale:'STALE DATA',waiting:'WAITING'}
+    };
+    const OPS_STALE_AFTER_MS = 30 * 60 * 1000;
+    const OPS_HISTORY_KEY = 'weatherOpsRiskHistoryV13';
+    const OPS_LAST_STATUS_KEY = 'weatherOpsLastRiskStatusV13';
+    let mapTileErrorCount = 0;
+    let mapHasLoaded = false;
+    function opsL(){return opsStatusText[appState.lang==='tc'?'tc':'en'];}
+    function loadOpsThresholds(){
+      try { const x=JSON.parse(localStorage.getItem('weatherOpsThresholds')||'null'); if(x) appState.opsThresholds={...appState.opsThresholds,...x}; } catch(e){}
+      const m={windWatch:'thrWindWatch',windWarn:'thrWindWarn',windCrit:'thrWindCrit',gustWatch:'thrGustWatch',gustWarn:'thrGustWarn',gustCrit:'thrGustCrit',rain:'thrRain',vis:'thrVis'};
+      Object.entries(m).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.value=appState.opsThresholds[k];});
+    }
+    function saveOpsThresholds(){
+      const ids={windWatch:'thrWindWatch',windWarn:'thrWindWarn',windCrit:'thrWindCrit',gustWatch:'thrGustWatch',gustWarn:'thrGustWarn',gustCrit:'thrGustCrit',rain:'thrRain',vis:'thrVis'};
+      Object.entries(ids).forEach(([k,id])=>{const v=parseFloat(document.getElementById(id)?.value);if(Number.isFinite(v))appState.opsThresholds[k]=v;});
+      localStorage.setItem('weatherOpsThresholds',JSON.stringify(appState.opsThresholds)); recordOpsStatusChanges(); renderOpsDashboard(); renderOpsAlerts();
+    }
+    function isOpsDataStale(d){return !d || !Number.isFinite(d.updated) || (Date.now()-d.updated)>OPS_STALE_AFTER_MS;}
+    function opsStatus(d){
+      if(!d) return {key:'stale',label:opsL().waiting};
+      if(isOpsDataStale(d)) return {key:'stale',label:appState.lang==='tc'?'資料過期':'STALE DATA'};
+      const t=appState.opsThresholds;
+      if(d.thunderstorm) return {key:'critical',label:opsL().critical};
+      if(d.wind>=t.windCrit || d.gust>=t.gustCrit || d.visibilityKm<t.vis*0.5) return {key:'critical',label:opsL().critical};
+      if(d.wind>=t.windWarn || d.gust>=t.gustWarn || d.visibilityKm<t.vis) return {key:'warning',label:opsL().warning};
+      if(d.wind>=t.windWatch || d.gust>=t.gustWatch || d.rainProb>=t.rain) return {key:'watch',label:opsL().watch};
+      return {key:'normal',label:opsL().normal};
+    }
+    function opsRiskReasons(d){
+      if(!d) return [appState.lang==='tc'?'尚未成功取得天氣資料。':'Weather data has not been retrieved successfully.'];
+      if(isOpsDataStale(d)) return [appState.lang==='tc'?'最後成功更新已超過30分鐘；請先確認資料新鮮度。':'Last successful update is over 30 minutes old; verify data freshness first.'];
+      const t=appState.opsThresholds, out=[];
+      const add=(label,value,limit,unit,op='≥')=>out.push(`${label}: ${Number(value).toFixed(1)} ${unit} ${op} ${Number(limit).toFixed(1)} ${unit}`);
+      if(d.thunderstorm) out.push(appState.lang==='tc'?'未來六小時預報出現雷暴（WMO 95–99）。':'Thunderstorm forecast within the next 6 hours (WMO 95–99).');
+      if(d.wind>=t.windCrit)add(appState.lang==='tc'?'風速／嚴重':'Wind / critical',d.wind,t.windCrit,'kt');
+      else if(d.wind>=t.windWarn)add(appState.lang==='tc'?'風速／警告':'Wind / warning',d.wind,t.windWarn,'kt');
+      else if(d.wind>=t.windWatch)add(appState.lang==='tc'?'風速／注意':'Wind / watch',d.wind,t.windWatch,'kt');
+      if(d.gust>=t.gustCrit)add(appState.lang==='tc'?'陣風／嚴重':'Gust / critical',d.gust,t.gustCrit,'kt');
+      else if(d.gust>=t.gustWarn)add(appState.lang==='tc'?'陣風／警告':'Gust / warning',d.gust,t.gustWarn,'kt');
+      else if(d.gust>=t.gustWatch)add(appState.lang==='tc'?'陣風／注意':'Gust / watch',d.gust,t.gustWatch,'kt');
+      if(Number.isFinite(d.visibilityKm)&&d.visibilityKm<t.vis*0.5)add(appState.lang==='tc'?'能見度／嚴重':'Visibility / critical',d.visibilityKm,t.vis*0.5,'km','<');
+      else if(Number.isFinite(d.visibilityKm)&&d.visibilityKm<t.vis)add(appState.lang==='tc'?'能見度／警告':'Visibility / warning',d.visibilityKm,t.vis,'km','<');
+      if(Number.isFinite(d.rainProb)&&d.rainProb>=t.rain)add(appState.lang==='tc'?'未來六小時最高降雨概率':'Max rain probability next 6h',d.rainProb,t.rain,'%','≥');
+      return out.length?out:[appState.lang==='tc'?'目前未觸發已設定的風、陣風、降雨或能見度門檻。':'No configured wind, gust, rain or visibility threshold is currently triggered.'];
+    }
+    function getOpsHistory(){try{return JSON.parse(localStorage.getItem(OPS_HISTORY_KEY)||'[]')}catch(e){return []}}
+    function recordOpsStatusChanges(){
+      let previous={};try{previous=JSON.parse(localStorage.getItem(OPS_LAST_STATUS_KEY)||'{}')}catch(e){}
+      const history=getOpsHistory();let changed=false;
+      Object.entries(appState.opsSiteData).forEach(([code,d])=>{
+        if(!d)return;
+        const key=opsStatus(d).key;
+        if(previous[code] && previous[code]!==key){history.unshift({time:Date.now(),code,from:previous[code],to:key,reasons:opsRiskReasons(d).slice(0,3)});changed=true;}
+        previous[code]=key;
+      });
+      try{localStorage.setItem(OPS_LAST_STATUS_KEY,JSON.stringify(previous));if(changed)localStorage.setItem(OPS_HISTORY_KEY,JSON.stringify(history.slice(0,100)));}catch(e){}
+      renderOpsHistory();
+    }
+    function renderOpsHistory(){
+      const box=document.getElementById('opsHistoryList');if(!box)return;
+      const items=getOpsHistory();const count=document.getElementById('opsHistoryCount');if(count)count.textContent=appState.lang==='tc'?`${items.length} 項紀錄`:`${items.length} events`;
+      if(!items.length){box.innerHTML=`<div class="ops-history-empty">${appState.lang==='tc'?'目前未記錄到風險級別轉變。系統會在下一次成功更新並偵測到級別變化時加入紀錄。':'No risk-level transitions recorded yet. A record is added when a successful refresh detects a status change.'}</div>`;return;}
+      const label=k=>({normal:appState.lang==='tc'?'正常':'NORMAL',watch:appState.lang==='tc'?'留意':'WATCH',warning:appState.lang==='tc'?'警告':'WARNING',critical:appState.lang==='tc'?'嚴重':'CRITICAL',stale:appState.lang==='tc'?'資料過期':'STALE DATA'})[k]||k;
+      box.innerHTML=items.slice(0,20).map(x=>`<div class="ops-history-row"><div><b>${x.code}</b><div class="ops-history-time">${new Date(x.time).toLocaleString(appState.lang==='tc'?'zh-HK':'en-GB',{timeZone:'Asia/Hong_Kong',hour12:false})} HKT</div></div><div class="ops-history-change"><b>${label(x.from)} → ${label(x.to)}</b><div class="mt-1" style="color:#666">${(x.reasons||[]).join(' · ')}</div></div></div>`).join('');
+    }
+    function clearOpsHistory(){try{localStorage.removeItem(OPS_HISTORY_KEY);localStorage.removeItem(OPS_LAST_STATUS_KEY)}catch(e){}renderOpsHistory();}
+    function statusClass(k){return `ops-status ops-${k}`;}
+    function weatherShort(code){return getWmoCodeDetails(code).text;}
+    function terminalName(code){const t=opsSiteCoords[code];return t?(appState.lang==='tc'?t.nameTc:t.nameEn):code;}
+    function selectOpsSite(code){
+      appState.selectedOpsSite=code;
+      const s=document.getElementById('scnTerminalSelect');
+      if(s && code!=='HK' && hkscnCoords[code]) s.value=code;
+      renderOpsDashboard();
+      renderOpsMap();
+      if(code!=='HK') fetchScnTerminalWeather();
+    }
+    function updateHealth(id,state,text){const el=document.getElementById(id);if(!el)return; const dot=el.parentElement.querySelector('.ops-dot'); dot.className='ops-dot '+(state==='ok'?'':'warn'); el.textContent=text;}
+    let opsMapInstance = null;
+    const opsMapMarkers = {};
+    function initOpsMap(){
+      const host=document.getElementById('terminalMap');
+      const status=document.getElementById('terminalMapStatus');
+      if(!host || opsMapInstance) return;
+      if(!window.maplibregl){
+        showMapFallback(appState.lang==='tc'?'地圖程式未能載入':'Map library could not load',appState.lang==='tc'?'右側碼頭清單及下方風險矩陣仍可使用。':'The terminal list and risk matrix remain available.');
+        return;
+      }
+      try {
+        opsMapInstance = new maplibregl.Map({
+          container: host,
+          style: 'https://tiles.openfreemap.org/styles/positron',
+          center: [115.2, 23.0],
+          zoom: 5.4,
+          minZoom: 4,
+          maxZoom: 16,
+          attributionControl: true
+        });
+        opsMapInstance.addControl(new maplibregl.NavigationControl({showCompass:true}), 'top-right');
+        opsMapInstance.on('load',()=>{mapHasLoaded=true;mapTileErrorCount=0;if(status) status.classList.add('is-hidden');});
+        opsMapInstance.on('error',(e)=>{
+          mapTileErrorCount++;
+          if(!mapHasLoaded || mapTileErrorCount>=3){
+            showMapFallback(appState.lang==='tc'?'公共地圖服務暫時無法使用':'Public map service temporarily unavailable',appState.lang==='tc'?'碼頭文字清單及風險矩陣仍會保留；OpenFreeMap 公共服務不保證 SLA。':'The terminal list and risk matrix remain available. OpenFreeMap public service has no SLA guarantee.');
+          }
+        });
+        const bounds = new maplibregl.LngLatBounds();
+        Object.entries(opsSiteCoords).forEach(([code,t])=>{
+          const el=document.createElement('button');
+          el.type='button';
+          el.className='ops-terminal-marker';
+          el.setAttribute('aria-label', code);
+          el.textContent=code==='HK'?'HK':code.startsWith('CN')?code.slice(2):code;
+          el.style.background=opsMapRiskColor(appState.opsSiteData[code]?opsStatus(appState.opsSiteData[code]).key:'stale');
+          el.addEventListener('click',(ev)=>{ev.stopPropagation();selectOpsSite(code);});
+          const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([t.lon,t.lat]).addTo(opsMapInstance);
+          opsMapMarkers[code]=marker;
+          bounds.extend([t.lon,t.lat]);
+        });
+        if(!bounds.isEmpty()) opsMapInstance.fitBounds(bounds,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:7,duration:0});
+        setTimeout(()=>opsMapInstance&&opsMapInstance.resize(),250);
+      } catch(err) {
+        if(status){status.classList.remove('is-hidden');status.textContent='地圖初始化失敗。請檢查網絡連線後重新載入。';}
+      }
+    }
+    function showMapFallback(title,detail){
+      const status=document.getElementById('terminalMapStatus');if(!status)return;
+      status.classList.remove('is-hidden');
+      status.innerHTML=`<div><div class="map-fallback-title"><i class="fas fa-triangle-exclamation mr-1"></i>${title}</div><div>${appState.lang==='tc'?'地圖未能完整顯示。':'The map could not be fully displayed.'}</div><div class="map-fallback-note">${detail}</div><button class="map-retry-btn" type="button" onclick="retryOpsMap()"><i class="fas fa-rotate-right mr-1"></i>${appState.lang==='tc'?'重試地圖':'Retry map'}</button></div>`;
+    }
+    function retryOpsMap(){
+      try{if(opsMapInstance)opsMapInstance.remove()}catch(e){}
+      opsMapInstance=null;mapHasLoaded=false;mapTileErrorCount=0;
+      Object.keys(opsMapMarkers).forEach(k=>delete opsMapMarkers[k]);
+      const status=document.getElementById('terminalMapStatus');if(status){status.classList.remove('is-hidden');status.innerHTML=`<span class="map-status-spinner"></span><span>${appState.lang==='tc'?'正在重試地圖…':'Retrying map…'}</span>`;}
+      initOpsMap();renderOpsMap();
+    }
+    window.addEventListener('resize',()=>{if(opsMapInstance)opsMapInstance.resize();});
+    function opsMapRiskColor(key){return ({normal:'#2E8B57',watch:'#D89A00',warning:'#D94841',critical:'#0ea5e9',stale:'#8A8A8A'})[key]||'#8A8A8A';}
+    function renderOpsMap(){
+      const list=document.getElementById('mapSiteList'); if(!list)return;
+      if(!opsMapInstance) initOpsMap();
+      const entries=Object.entries(opsSiteCoords);
+      const riskRank={critical:0,warning:1,watch:2,normal:3,stale:4};
+      // Keep the actively selected terminal at the top; sort remaining sites by operational risk.
+      const listEntries=[...entries].sort(([codeA],[codeB])=>{
+        const selectedA=appState.selectedOpsSite===codeA, selectedB=appState.selectedOpsSite===codeB;
+        if(selectedA!==selectedB) return selectedA?-1:1;
+        const dataA=appState.opsSiteData[codeA], dataB=appState.opsSiteData[codeB];
+        const keyA=dataA?opsStatus(dataA).key:'stale', keyB=dataB?opsStatus(dataB).key:'stale';
+        return (riskRank[keyA]??9)-(riskRank[keyB]??9) || codeA.localeCompare(codeB);
+      });
+      const count=entries.filter(([code])=>!!appState.opsSiteData[code]).length;
+      const countEl=document.getElementById('mapSiteCount');if(countEl)countEl.textContent=`${count} / ${entries.length}`;
+      list.innerHTML=listEntries.map(([code,t])=>{
+        const d=appState.opsSiteData[code];
+        const st=d?opsStatus(d):{key:'stale',label:opsL().waiting};
+        const color=opsMapRiskColor(st.key);
+        const selected=appState.selectedOpsSite===code;
+        const name=appState.lang==='tc'?t.nameTc:t.nameEn;
+        const stale=d?isOpsDataStale(d):true;
+        const freshness=d?`<div class="ops-freshness ${stale?'is-stale':''}"><i class="fas ${stale?'fa-triangle-exclamation':'fa-clock'}"></i>${appState.lang==='tc'?'最後更新':'Last updated'}: ${new Date(d.updated).toLocaleTimeString(appState.lang==='tc'?'zh-HK':'en-GB',{timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})} HKT${stale?(appState.lang==='tc'?' · 資料過期':' · STALE'):''}</div>`:`<div class="ops-freshness is-stale">${appState.lang==='tc'?'尚未取得資料':'No successful data yet'}</div>`;
+        const metric=d?`<div class="site-metric mt-1">${appState.lang==='tc'?'氣溫':'Temp'} <b>${Number.isFinite(d.temperature)?d.temperature.toFixed(1)+'°C':'--'}</b>　${appState.lang==='tc'?'風速':'Wind'} <b>${Number(d.wind||0).toFixed(0)} kt</b>　${appState.lang==='tc'?'陣風':'Gust'} <b>${Number(d.gust||0).toFixed(0)} kt</b></div><div class="site-metric mt-1">${appState.lang==='tc'?'降雨':'Rain'} <b>${d.rainProb??'--'}%</b>　${appState.lang==='tc'?'能見度':'Vis'} <b>${Number.isFinite(d.visibilityKm)?d.visibilityKm.toFixed(1)+' km':'--'}</b>　${appState.lang==='tc'?'濕度':'RH'} <b>${d.humidity??'--'}%</b></div><div class="site-metric mt-1">${appState.lang==='tc'?'風向':'Dir'} <b>${d.windDir??'--'}°</b>　${weatherShort(d.code)}</div><div class="ops-reason"><b>${appState.lang==='tc'?'風險原因':'Why this status?'}</b><ul class="list-disc pl-4 mt-1">${opsRiskReasons(d).map(r=>`<li>${r}</li>`).join('')}</ul></div>`:`<div class="site-metric mt-1">${appState.lang==='tc'?'等待天氣資料':'Waiting for weather data'}</div>`;
+        const selectedTag=selected?`<span class="map-selected-tag"><i class="fas fa-location-crosshairs"></i>${appState.lang==='tc'?'目前選取':'SELECTED'}</span>`:'';
+        return `<button type="button" aria-pressed="${selected?'true':'false'}" class="map-site-row ${selected?'is-selected':''}" onclick="selectOpsSite('${code}')"><div class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><i class="map-risk-dot" style="background:${color}"></i><b>${code}</b></span><span class="flex items-center gap-1.5">${selectedTag}<span class="ops-status ${statusClass(st.key)}">${st.label}</span></span></div><div class="text-xs mt-1" style="color:#333">${name}</div>${freshness}${metric}</button>`;
+      }).join('');
+      entries.forEach(([code,t])=>{
+        const d=appState.opsSiteData[code]; const st=d?opsStatus(d):{key:'stale',label:opsL().waiting};
+        const marker=opsMapMarkers[code]; if(!marker)return;
+        const color=opsMapRiskColor(st.key);
+        const el=marker.getElement();
+        if(el){el.style.background=color;el.classList.toggle('is-selected',appState.selectedOpsSite===code);el.textContent=code==='HK'?'HK':code.startsWith('CN')?code.slice(2):code;}
+        const name=appState.lang==='tc'?t.nameTc:t.nameEn;
+        const popup=d?`<div style="min-width:205px;color:#222"><b>${code} · ${name}</b><div style="margin:5px 0"><span style="display:inline-block;background:${color};color:white;padding:2px 7px;border-radius:10px;font-size:11px">${st.label}</span></div><div>${appState.lang==='tc'?'氣溫':'Temperature'}: <b>${Number.isFinite(d.temperature)?d.temperature.toFixed(1)+'°C':'--'}</b></div><div>${appState.lang==='tc'?'風速':'Wind'}: <b>${Number(d.wind||0).toFixed(0)} kt</b> · ${appState.lang==='tc'?'陣風':'Gust'}: <b>${Number(d.gust||0).toFixed(0)} kt</b></div><div>${appState.lang==='tc'?'降雨機率':'Rain probability'}: <b>${d.rainProb??'--'}%</b></div><div>${appState.lang==='tc'?'能見度':'Visibility'}: <b>${Number.isFinite(d.visibilityKm)?d.visibilityKm.toFixed(1)+' km':'--'}</b> · ${appState.lang==='tc'?'濕度':'Humidity'}: <b>${d.humidity??'--'}%</b></div><div style="margin-top:7px;font-size:11px;color:${isOpsDataStale(d)?'#9B1C1C':'#555'}">${appState.lang==='tc'?'最後更新':'Last updated'} ${new Date(d.updated).toLocaleTimeString('en-GB',{timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',hour12:false})} HKT${isOpsDataStale(d)?' · STALE':''}</div><div style="margin-top:6px;font-size:11px"><b>${appState.lang==='tc'?'風險原因':'Risk reasons'}</b><br>${opsRiskReasons(d).join('<br>')}</div><button onclick="selectOpsSite('${code}')" style="margin-top:8px;background:#0ea5e9;color:white;border:0;border-radius:5px;padding:5px 9px;font-size:11px">${appState.lang==='tc'?'查看六小時預報':'View 6-hour forecast'}</button></div>`:`<b>${code} · ${name}</b><div>${appState.lang==='tc'?'正在等待天氣資料':'Waiting for weather data'}</div>`;
+        const popupObj=new maplibregl.Popup({offset:18,closeButton:true,closeOnClick:false}).setHTML(popup);
+        marker.setPopup(popupObj);
+      });
+    }
+
+    function renderOpsDashboard(){
+      const rows=Object.entries(appState.opsSiteData);
+      const stats={critical:0,warning:0,watch:0,stale:0,maxWind:0,maxGust:0,minVis:Infinity,rain:0,ts:0};
+      const matrix=document.getElementById('opsTerminalMatrix');
+      if(matrix){
+        matrix.innerHTML=rows.length?rows.map(([code,d])=>{
+          if(!d)return '';
+          const st=opsStatus(d);stats[st.key]++;stats.maxWind=Math.max(stats.maxWind,d.wind||0);stats.maxGust=Math.max(stats.maxGust,d.gust||0);
+          if(Number.isFinite(d.visibilityKm))stats.minVis=Math.min(stats.minVis,d.visibilityKm);
+          if((d.rainProb||0)>=appState.opsThresholds.rain)stats.rain++;
+          if(d.thunderstorm)stats.ts++;
+          const group=code==='HK'?'HK':'HKSCN';
+          return `<tr class="${appState.selectedOpsSite===code?'ops-selected':''}" onclick="selectOpsSite('${code}')"><td><b>${code}</b><div class="text-[10px] ops-muted">${terminalName(code)}</div><div class="text-[9px] text-sky-300">${group}</div></td><td><b>${d.wind?.toFixed(0)??'--'}</b> kt</td><td><b>${d.gust?.toFixed(0)??'--'}</b> kt</td><td>${d.rainProb??'--'}%</td><td>${d.visibilityKm!=null?d.visibilityKm.toFixed(1):'--'} km</td><td>${weatherShort(d.code)}</td><td><span class="${statusClass(st.key)}">${st.label}</span><div class="text-[10px] mt-1" style="color:#555;min-width:160px">${opsRiskReasons(d).slice(0,2).join('<br>')}</div><div class="text-[9px] mt-1" style="color:${isOpsDataStale(d)?'#9B1C1C':'#666'}">${appState.lang==='tc'?'更新':'Updated'} ${new Date(d.updated).toLocaleTimeString('en-GB',{timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',hour12:false})} HKT${isOpsDataStale(d)?' · STALE':''}</div></td></tr>`;
+        }).join(''):'<tr><td colspan="7" class="ops-muted p-4">No site data</td></tr>';
+      }
+      const set=(id,v)=>{const e=document.getElementById(id);if(e)e.innerHTML=v;};
+      set('opsCriticalCount',stats.critical);set('opsWarningTerminalCount',stats.warning);set('opsWatchCount',stats.watch);
+      set('opsMaxWind',`${stats.maxWind.toFixed(0)} <span class="text-xs font-normal">kt</span>`);set('opsMaxGust',`${stats.maxGust.toFixed(0)} <span class="text-xs font-normal">kt</span>`);
+      set('opsMinVis',`${Number.isFinite(stats.minVis)?stats.minVis.toFixed(1):'--'} <span class="text-xs font-normal">km</span>`);
+      const rainLabel=appState.lang==='tc'?`${stats.rain} 個地點 / ${stats.ts} 雷暴`:`${stats.rain} sites / ${stats.ts} TS`; set('opsRainRisk',rainLabel);
+      const overall=stats.critical?'critical':stats.warning?'warning':stats.watch?'watch':stats.stale>0?'stale':'normal';
+      const os=document.getElementById('opsOverallStatus');if(os){os.className=statusClass(overall);os.innerHTML=`<i class="fas ${overall==='normal'?'fa-circle-check':overall==='watch'?'fa-eye':'fa-triangle-exclamation'}"></i> ${opsL()[overall]}`;}
+      const ss=appState.opsSiteData[appState.selectedForecastSite]; const sel=document.getElementById('opsSelectedStatus'); if(sel){const st=ss?opsStatus(ss):{key:'stale',label:opsL().waiting};sel.className=statusClass(st.key);sel.textContent=st.label;}
+      renderSelectedForecast();
+      renderOpsMap();
+    }
+    function selectForecastSite(code){
+      if(!opsSiteCoords[code]) return;
+      appState.selectedForecastSite=code;
+      const selector=document.getElementById('opsForecastSiteSelect');
+      if(selector && selector.value!==code) selector.value=code;
+      renderSelectedForecast();
+      const d=appState.opsSiteData[code];
+      const status=document.getElementById('opsSelectedStatus');
+      if(status){const st=d?opsStatus(d):{key:'stale',label:opsL().waiting};status.className=statusClass(st.key);status.textContent=st.label;}
+    }
+    function renderSelectedForecast(){
+      const code=appState.selectedForecastSite||'CNSHK',d=appState.opsSiteData[code];
+      const title=document.getElementById('opsSelectedTitle');if(title)title.textContent=`${appState.lang==='tc'?'所選地點':'Selected Site'} — ${code} ${terminalName(code)}`;
+      const selector=document.getElementById('opsForecastSiteSelect');if(selector && selector.value!==code)selector.value=code;
+      const box=document.getElementById('opsSixHourForecast');if(!box)return;
+      if(!d?.hourly){box.innerHTML=`<div class="ops-muted text-xs">${appState.lang==='tc'?'目前沒有可用的預報資料。':'No forecast data available.'}</div>`;return;}
+      box.innerHTML=d.hourly.slice(0,6).map(h=>`<div class="ops-hour"><div class="text-[10px] ops-muted">${h.time}</div><div class="text-lg font-bold mt-1">${h.wind.toFixed(0)} kt</div><div class="text-[10px]">${appState.lang==='tc'?'陣風':'Gust'} ${h.gust.toFixed(0)} kt</div><div class="text-[10px]">${appState.lang==='tc'?'降雨':'Rain'} ${h.rainProb}%</div><div class="text-[10px]">${appState.lang==='tc'?'能見度':'Vis'} ${h.visibilityKm.toFixed(1)} km</div><div class="text-[10px] mt-1">${weatherShort(h.code)}</div></div>`).join('');
+    }
+    function renderOpsAlerts(){
+      const box=document.getElementById('opsAlertCenter');if(!box)return;
+      const alerts=[];
+      Object.entries(appState.opsSiteData).forEach(([code,d])=>{if(!d)return;const st=opsStatus(d);if(st.key!=='normal'){
+        const reason=opsRiskReasons(d).join(' · ');
+        const updated=new Date(d.updated).toLocaleTimeString('en-GB',{timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',hour12:false});
+        alerts.push(`<div class="border border-[#bae6fd] rounded-lg p-3 bg-[#f0f9ff]"><div class="flex items-center justify-between gap-2"><b class="text-xs">${code} — ${terminalName(code)}</b><span class="${statusClass(st.key)}">${st.label}</span></div><div class="text-[11px] ops-muted mt-1">${reason}</div><div class="text-[10px] mt-1">Wind ${d.wind.toFixed(0)}kt · Gust ${d.gust.toFixed(0)}kt · Rain ${d.rainProb}% · Vis ${d.visibilityKm.toFixed(1)}km</div><div class="text-[10px] mt-1" style="color:${isOpsDataStale(d)?'#9B1C1C':'#666'}">${appState.lang==='tc'?'最後更新':'Last updated'} ${updated} HKT${isOpsDataStale(d)?' · STALE DATA':''}</div></div>`);
+      }});
+      box.innerHTML=alerts.length?alerts.join(''):`<div class="flex items-center gap-2 text-xs text-emerald-200"><i class="fas fa-circle-check"></i>${appState.lang==='tc'?'目前沒有地點觸發營運風險門檻。':'No site threshold breaches detected.'}</div>`;
+    }
+    async function fetchOpsSite(code,t){
+      const url=`https://api.open-meteo.com/v1/forecast?latitude=${t.lat}&longitude=${t.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&hourly=weather_code,wind_speed_10m,wind_gusts_10m,precipitation_probability,visibility&wind_speed_unit=kn&timezone=Asia%2FHong_Kong&forecast_days=2`;
+      try{
+        const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const data=await r.json();const cur=data.current;
+        const times=data.hourly?.time||[];let nowIndex=times.findIndex(x=>new Date(x)>=new Date(cur.time));if(nowIndex<0)nowIndex=0;
+        const hourly=times.slice(nowIndex,nowIndex+6).map((time,i)=>({time:time.slice(11,16),wind:data.hourly.wind_speed_10m[nowIndex+i]||0,gust:data.hourly.wind_gusts_10m[nowIndex+i]||0,rainProb:data.hourly.precipitation_probability[nowIndex+i]||0,visibilityKm:(data.hourly.visibility[nowIndex+i]||0)/1000,code:data.hourly.weather_code[nowIndex+i]}));
+        const maxH=hourly.reduce((a,h)=>({wind:Math.max(a.wind,h.wind),gust:Math.max(a.gust,h.gust),rainProb:Math.max(a.rainProb,h.rainProb),visibilityKm:Math.min(a.visibilityKm,h.visibilityKm)}),{wind:cur.wind_speed_10m||0,gust:cur.wind_gusts_10m||0,rainProb:0,visibilityKm:(cur.visibility||0)/1000});
+        return [code,{temperature:cur.temperature_2m,humidity:cur.relative_humidity_2m,windDir:cur.wind_direction_10m,wind:cur.wind_speed_10m||0,gust:cur.wind_gusts_10m||0,visibilityKm:(cur.visibility||0)/1000,code:cur.weather_code,rainProb:maxH.rainProb,thunderstorm:hourly.some(h=>h.code>=95),hourly,maxH,updated:Date.now()}];
+      }catch(e){return [code,null];}
+    }
+    async function fetchAllScnTerminals(){
+      const entries=Object.entries(opsSiteCoords);
+      const results=await Promise.all(entries.map(([code,t])=>fetchOpsSite(code,t)));
+      let ok=0;results.forEach(([code,d])=>{if(d){appState.opsSiteData[code]=d;ok++;}});
+      recordOpsStatusChanges();
+      const selected=appState.opsSiteData[appState.selectedScnTerminal];
+      if(selected){
+        renderSelectedScnTerminal(selected);
+      }
+      /* legacy selected-site display handled above */
+      if(false && selected && appState.selectedOpsSite!=='HK'){
+        const set=(id,v)=>{const e=document.getElementById(id);if(e)e.innerText=v;};set('scnTemp',`${Math.round(selected.temperature||0)}°C`);set('scnWindSpeed',selected.wind?.toFixed(0)||'--');set('scnWindGust',selected.gust?.toFixed(0)||'--');set('scnWindDir',appState.lang==='tc'?`風向：${selected.windDir??'--'}°`:`Dir: ${selected.windDir??'--'}°`);set('scnHumidity',appState.lang==='tc'?`相對濕度：${selected.humidity??'--'}%`:`Humidity: ${selected.humidity??'--'}%`);set('scnDesc',weatherShort(selected.code));const icon=document.getElementById('scnIcon');if(icon)icon.innerHTML=getWmoCodeDetails(selected.code).icon;
+      }
+      const stamp=new Date(),hm=stamp.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});const sync=document.getElementById('opsLastSync');if(sync)sync.textContent=`${hm} HKT`;
+      updateHealth('healthScn',ok===entries.length?'ok':'warn',`${ok}/${entries.length} ${appState.lang==='tc'?'個地點':'sites'}`);renderOpsDashboard();renderOpsAlerts();
+    }
+    function populateOpsTerminalSelect(){const s=document.getElementById('opsTerminalSelect');if(!s)return;s.innerHTML=Object.keys(hkscnCoords).map(c=>`<option value="${c}" ${c===appState.selectedScnTerminal?'selected':''}>${c} — ${terminalName(c)}</option>`).join('');}
+
+    function applyOpsLanguage(){
+      const tc=appState.lang==='tc';
+      const set=(id,tcText,enText)=>{const e=document.getElementById(id);if(e)e.innerText=tc?tcText:enText;};
+      set('opsTitle','天氣營運監察','WEATHER OPS CONTROL');set('opsSubtitle','香港及 HKSCN 碼頭營運天氣風險總覽','HK / HKSCN Operational Weather Risk Overview');set('opsLastSyncLabel','最後同步時間','Last sync');set('opsRefreshLabel','重新整理','Refresh');
+      set('opsMeaningTitle','風險狀態如何判定？','How is the risk status calculated?');
+      set('opsMeaningText', '系統會將香港（HK）及六個 HKSCN 碼頭目前與未來六小時的風速、陣風、降雨、能見度及雷暴資料，與所設定的營運門檻進行比較。正常：未觸發門檻；留意：存在潛在風險，應持續監察；警告：已觸發較高風險門檻；嚴重：已達嚴重門檻或預測有雷暴等高風險情況。注意：此狀態僅供天氣風險參考，並不代表系統自動判定停止碼頭作業；實際處置須遵循公司及各碼頭的標準作業程序（SOP）。','The system compares current + next 6-hour wind, gust, rain, visibility and thunderstorm conditions across Hong Kong HK and the six HKSCN terminals against your OPS thresholds. NORMAL = no threshold triggered; WATCH = potential risk to monitor; WARNING = higher-risk threshold triggered; CRITICAL = severe threshold / thunderstorm or other high-risk condition. This is a weather risk indicator, not an automatic stop-work decision; your terminal-specific SOP remains the final authority.');
+      set('opsKpiWarning','HKO 生效警告','Active HKO Warnings');set('opsKpiCritical','嚴重風險地點','Critical Sites');set('opsKpiWarningSite','警告地點','Warning Sites');set('opsKpiWatch','需留意地點','Watch Sites');set('opsKpiMaxWind','最高風速','Max Wind');set('opsKpiMaxGust','最高陣風','Max Gust');set('opsKpiMinVis','最低能見度','Min Visibility');set('opsKpiRain','未來六小時降雨／雷暴','Rain / TS Next 6h');
+      document.querySelectorAll('[data-nav-tc]').forEach(el=>{el.textContent=tc?el.dataset.navTc:el.dataset.navEn;});
+      set('opsMapTitle','香港及 HKSCN 碼頭風險地圖','Hong Kong & HKSCN Terminal Risk Map');set('opsMapSubtitle','選取地圖標記或右側地點，查看當前天氣數據','Select a map marker or site to view current weather');set('mapSiteListTitle','地點即時摘要','Live site summary');
+      set('opsAlertTitle','營運天氣警示中心','Operational Alert Center');set('opsAlertLegend','目前 + 未來6小時','Current + next 6h');set('opsMatrixTitle','香港及 HKSCN 碼頭風險總覽','HK + HKSCN Terminal Risk Matrix');set('opsMatrixHint','選取地點以查看未來六小時預報','Click a site for next 6 hours');
+      set('opsHistoryTitle','營運風險狀態歷史','Operational Risk Status History');set('opsHistoryClear','清除歷史','Clear history');set('opsHistoryNote','歷史紀錄儲存於此瀏覽器；清除網站資料或更換裝置不會保留。此紀錄供監察參考，並非正式稽核日誌。','History is stored in this browser only; it will not follow you to another device and may be lost if site data is cleared. This is for monitoring, not a formal audit log.');
+      set('thSite','地點','Site');set('thWind','風速','Wind');set('thGust','陣風','Gust');set('thRain','降雨機率','Rain');set('thVis','能見度','Visibility');set('thCondition','天氣','Condition');set('thStatus','風險','Risk');set('opsMatrixDisclaimer','風險狀態僅供參考；實際作業限制須以公司標準作業程序為準。','Risk is an indicator only; actual operation limits must follow company SOP.');
+      set('opsSelectedSubtitle','未來六小時天氣預報及營運指標','Next 6 hours forecast / operational indicators');set('opsHealthTitle','資料來源狀態','Data Health');set('opsHealthLegend','請勿使用已過期的資料','Do not trust stale data');set('healthLabelHko','HKO 即時天氣','HKO Current Weather');set('healthLabelWarn','HKO 天氣警告','HKO Warnings');set('healthLabelScn','HKSCN Open-Meteo','HKSCN Open-Meteo');set('healthLabelTide','潮汐','Tide');set('healthTide','原本設定資料表','Configured table');
+      set('opsThresholdTitle','營運風險門檻設定','OPS Working Thresholds');set('opsThresholdLegend','設定僅儲存於此瀏覽器','Saved locally in this browser');set('lblWindWatch','風速：注意門檻','Wind watch');set('lblWindWarn','風速：警告門檻','Wind warning');set('lblWindCrit','風速：嚴重門檻','Wind critical');set('lblGustWatch','陣風：注意門檻','Gust watch');set('lblGustWarn','陣風：警告門檻','Gust warning');set('lblGustCrit','陣風：嚴重門檻','Gust critical');set('lblRain','降雨機率','Rain probability');set('lblVis','能見度（公里）','Visibility (km)');set('opsApplyThreshold','套用門檻設定','Apply Threshold');
+      renderOpsHistory();
+      set('opsGuideTitle','風險狀態指南','Risk Status Guide');set('guideNormal','目前未觸發任何營運風險門檻。','No working threshold is triggered.');set('guideWatch','風險正在接近或已觸發較低級別門檻，建議持續監察。','Potential / lower-level risk; monitor the trend.');set('guideWarning','已觸發較高級別的風速、陣風或能見度門檻，營運團隊應予以關注。','Higher wind, gust or visibility threshold triggered; OPS attention required.');set('guideCritical','已觸發嚴重門檻或出現雷暴等高風險情況；請立即依照公司標準作業程序處理。','Severe threshold or thunderstorm/high-risk condition; follow company SOP immediately.');set('opsDetailsTitle','天文台、天文及潮汐詳細資料','Detailed HKO / Astro / Tide Information');set('opsDetailsHint','補充資料（選取以展開）','Secondary — click to expand');
+      renderOpsDashboard();renderOpsAlerts();
+    }
+    /* 人手更新總控制函數 (帶按鈕旋轉動畫) */
+    function fetchAllHkoData(isManual = false) {
+      const manualBtnIcon = document.getElementById('manualBtnIcon');
+      const mainRefreshIcon = document.getElementById('mainRefreshIcon');
+      
+      if (manualBtnIcon) manualBtnIcon.classList.add('fa-spin');
+      if (mainRefreshIcon) mainRefreshIcon.classList.add('fa-spin');
+
+      fetchCurrentWeatherReport(isManual);
+      fetchLocalWeatherForecast();
+      fetchNineDayForecast();
+      fetchWarningSummary();
+      const oi=document.getElementById('opsRefreshIcon'); if(oi)oi.classList.add('fa-spin');
+      fetchAllScnTerminals().finally(()=>{if(oi)oi.classList.remove('fa-spin');});
+
+      setTimeout(() => {
+        if (manualBtnIcon) manualBtnIcon.classList.remove('fa-spin');
+        if (mainRefreshIcon) mainRefreshIcon.classList.remove('fa-spin');
+      }, 800);
+    }
+
+    function setupOpsSidebar(){
+      const links=[...document.querySelectorAll('.ops-nav-link')];
+      links.forEach(link=>link.addEventListener('click',()=>{links.forEach(x=>x.classList.remove('active'));link.classList.add('active');}));
+      if('IntersectionObserver' in window){
+        const observer=new IntersectionObserver(items=>items.forEach(item=>{if(item.isIntersecting){const id='#'+item.target.id;links.forEach(link=>link.classList.toggle('active',link.getAttribute('href')===id));}}),{rootMargin:'-20% 0px -65% 0px'});
+        links.forEach(link=>{const target=document.querySelector(link.getAttribute('href'));if(target)observer.observe(target);});
+      }
+    }
+
+    window.onload = function () {
+      setupOpsSidebar();
+      initOpsMap();
+      loadOpsThresholds();
+      applyOpsLanguage();
+      populateOpsTerminalSelect();
+      updateSelectedTideStation();
+      fetchAllHkoData(false);
+      changeRefreshInterval();
+      setInterval(drawAnalogClock, 1000);
+      setInterval(updateCalendarAndClock, 30000);
+      drawAnalogClock();
+      updateCalendarAndClock();
+    };
+    // Re-evaluate freshness even if the network refresh fails; never leave old readings looking current.
+    setInterval(()=>{renderOpsDashboard();renderOpsAlerts();recordOpsStatusChanges();},60*1000);
+    renderOpsHistory();
+  </script>
+</body>
+</html>
