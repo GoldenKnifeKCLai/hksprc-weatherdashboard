@@ -980,7 +980,7 @@
       <div class="flex flex-col gap-3.5">
 
         <!-- NEW Card: HKSCN Terminal Weather (Open-Meteo Integration) -->
-        <section class="hko-card border border-amber-500/40">
+        <section id="scnWeatherSection" class="hko-card border border-amber-500/40 ops-section-anchor">
           <div class="hko-card-header bg-gradient-to-r from-[#1a3a6e] to-[#2d2812]">
             <span id="scnTitle" class="flex items-center gap-1.5"><i class="fas fa-ship text-amber-400"></i> <span id="scnHeaderLabel">華南碼頭天氣 (HKSCN)</span></span>
             <select id="scnTerminalSelect" onchange="selectScnTerminalFromDropdown()" class="bg-[#24497e] text-white text-xs px-2 py-0.5 rounded outline-none border border-[#3b6db7] max-w-[170px] focus:ring-1 focus:ring-amber-400">
@@ -2264,12 +2264,14 @@
       fetchAllHkoData(false);
     }
 
-    function changeRefreshInterval() {
+    function changeRefreshInterval(shouldFetch = true) {
       if (appState.autoRefreshTimer) clearInterval(appState.autoRefreshTimer);
       const val = parseInt(document.getElementById('autoRefreshSelect').value, 10);
       appState.autoRefreshIntervalMs = val;
       
-      fetchAllHkoData(false);
+      if (shouldFetch) {
+        fetchAllHkoData(false);
+      }
 
       if (val > 0) {
         appState.autoRefreshTimer = setInterval(() => {
@@ -2338,9 +2340,10 @@
       if(!d) return {key:'stale',label:opsL().waiting};
       if(isOpsDataStale(d)) return {key:'stale',label:appState.lang==='tc'?'資料過期':'STALE DATA'};
       const t=appState.opsThresholds;
+      const hasVis = Number.isFinite(d.visibilityKm);
       if(d.thunderstorm) return {key:'critical',label:opsL().critical};
-      if(d.wind>=t.windCrit || d.gust>=t.gustCrit || d.visibilityKm<t.vis*0.5) return {key:'critical',label:opsL().critical};
-      if(d.wind>=t.windWarn || d.gust>=t.gustWarn || d.visibilityKm<t.vis) return {key:'warning',label:opsL().warning};
+      if(d.wind>=t.windCrit || d.gust>=t.gustCrit || (hasVis && d.visibilityKm<t.vis*0.5)) return {key:'critical',label:opsL().critical};
+      if(d.wind>=t.windWarn || d.gust>=t.gustWarn || (hasVis && d.visibilityKm<t.vis)) return {key:'warning',label:opsL().warning};
       if(d.wind>=t.windWatch || d.gust>=t.gustWatch || d.rainProb>=t.rain) return {key:'watch',label:opsL().watch};
       return {key:'normal',label:opsL().normal};
     }
@@ -2549,31 +2552,180 @@
       }});
       box.innerHTML=alerts.length?alerts.join(''):`<div class="flex items-center gap-2 text-xs text-emerald-200"><i class="fas fa-circle-check"></i>${appState.lang==='tc'?'目前沒有地點觸發營運風險門檻。':'No site threshold breaches detected.'}</div>`;
     }
-    async function fetchOpsSite(code,t){
-      const url=`https://api.open-meteo.com/v1/forecast?latitude=${t.lat}&longitude=${t.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&hourly=weather_code,wind_speed_10m,wind_gusts_10m,precipitation_probability,visibility&wind_speed_unit=kn&timezone=Asia%2FHong_Kong&forecast_days=2`;
+    const OPS_SITE_CACHE_KEY = 'weatherOpsSiteCacheV1';
+    let scnFetchInFlight = null;
+    let lastOpenMeteoError = '';
+
+    function loadOpsSiteCache(){
       try{
-        const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const data=await r.json();const cur=data.current;
-        const times=data.hourly?.time||[];let nowIndex=times.findIndex(x=>new Date(x)>=new Date(cur.time));if(nowIndex<0)nowIndex=0;
-        const hourly=times.slice(nowIndex,nowIndex+6).map((time,i)=>({time:time.slice(11,16),wind:data.hourly.wind_speed_10m[nowIndex+i]||0,gust:data.hourly.wind_gusts_10m[nowIndex+i]||0,rainProb:data.hourly.precipitation_probability[nowIndex+i]||0,visibilityKm:(data.hourly.visibility[nowIndex+i]||0)/1000,code:data.hourly.weather_code[nowIndex+i]}));
-        const maxH=hourly.reduce((a,h)=>({wind:Math.max(a.wind,h.wind),gust:Math.max(a.gust,h.gust),rainProb:Math.max(a.rainProb,h.rainProb),visibilityKm:Math.min(a.visibilityKm,h.visibilityKm)}),{wind:cur.wind_speed_10m||0,gust:cur.wind_gusts_10m||0,rainProb:0,visibilityKm:(cur.visibility||0)/1000});
-        return [code,{temperature:cur.temperature_2m,humidity:cur.relative_humidity_2m,windDir:cur.wind_direction_10m,wind:cur.wind_speed_10m||0,gust:cur.wind_gusts_10m||0,visibilityKm:(cur.visibility||0)/1000,code:cur.weather_code,rainProb:maxH.rainProb,thunderstorm:hourly.some(h=>h.code>=95),hourly,maxH,updated:Date.now()}];
-      }catch(e){return [code,null];}
+        const cached = JSON.parse(localStorage.getItem(OPS_SITE_CACHE_KEY)||'null');
+        if(cached && typeof cached === 'object'){
+          Object.entries(cached).forEach(([code, d])=>{
+            if(d && opsSiteCoords[code] && !appState.opsSiteData[code]) appState.opsSiteData[code] = d;
+          });
+        }
+      }catch(e){}
     }
+    function saveOpsSiteCache(){
+      try{ localStorage.setItem(OPS_SITE_CACHE_KEY, JSON.stringify(appState.opsSiteData)); }catch(e){}
+    }
+
+    function parseOpenMeteoSitePayload(code, data){
+      if(!data || !data.current) return null;
+      const cur = data.current;
+      const times = data.hourly?.time || [];
+      let nowIndex = times.findIndex(x => x >= cur.time);
+      if(nowIndex < 0) nowIndex = 0;
+      const hourly = times.slice(nowIndex, nowIndex + 6).map((time, i) => {
+        const rawHVis = data.hourly?.visibility?.[nowIndex + i];
+        return {
+          time: String(time).slice(11, 16),
+          wind: Number(data.hourly?.wind_speed_10m?.[nowIndex + i] ?? 0),
+          gust: Number(data.hourly?.wind_gusts_10m?.[nowIndex + i] ?? 0),
+          rainProb: Number(data.hourly?.precipitation_probability?.[nowIndex + i] ?? 0),
+          visibilityKm: Number.isFinite(rawHVis) ? rawHVis / 1000 : 10,
+          code: Number(data.hourly?.weather_code?.[nowIndex + i] ?? cur.weather_code ?? 0)
+        };
+      });
+      const rawCurVis = cur.visibility ?? data.hourly?.visibility?.[nowIndex];
+      const baseVisKm = Number.isFinite(rawCurVis) ? rawCurVis / 1000 : null;
+      const maxH = hourly.reduce((a, h) => ({
+        wind: Math.max(a.wind, h.wind),
+        gust: Math.max(a.gust, h.gust),
+        rainProb: Math.max(a.rainProb, h.rainProb),
+        visibilityKm: Number.isFinite(a.visibilityKm) ? Math.min(a.visibilityKm, h.visibilityKm) : h.visibilityKm
+      }), {
+        wind: Number(cur.wind_speed_10m ?? 0),
+        gust: Number(cur.wind_gusts_10m ?? 0),
+        rainProb: 0,
+        visibilityKm: baseVisKm
+      });
+      return {
+        temperature: Number(cur.temperature_2m),
+        humidity: Number(cur.relative_humidity_2m),
+        windDir: Number(cur.wind_direction_10m),
+        wind: Number(cur.wind_speed_10m ?? 0),
+        gust: Number(cur.wind_gusts_10m ?? 0),
+        visibilityKm: baseVisKm,
+        code: Number(cur.weather_code ?? 0),
+        rainProb: maxH.rainProb,
+        thunderstorm: hourly.some(h => h.code >= 95),
+        hourly,
+        maxH,
+        updated: Date.now()
+      };
+    }
+
+    async function fetchOpsBatch(entries){
+      const lats = entries.map(([,t]) => t.lat).join(',');
+      const lons = entries.map(([,t]) => t.lon).join(',');
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&hourly=weather_code,wind_speed_10m,wind_gusts_10m,precipitation_probability,visibility&wind_speed_unit=kn&timezone=Asia%2FHong_Kong&forecast_days=2`;
+      const r = await fetch(url, { cache: 'no-store' });
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const raw = await r.json();
+      const list = Array.isArray(raw) ? raw : [raw];
+      const out = [];
+      entries.forEach(([code], idx) => {
+        const parsed = parseOpenMeteoSitePayload(code, list[idx]);
+        if(parsed) out.push([code, parsed]);
+      });
+      return out;
+    }
+
+    async function fetchOpsSite(code, t){
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${t.lat}&longitude=${t.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&hourly=weather_code,wind_speed_10m,wind_gusts_10m,precipitation_probability,visibility&wind_speed_unit=kn&timezone=Asia%2FHong_Kong&forecast_days=2`;
+      try{
+        const r = await fetch(url, { cache: 'no-store' });
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        return [code, parseOpenMeteoSitePayload(code, data)];
+      }catch(e){
+        lastOpenMeteoError = e?.message || 'Fetch error';
+        return [code, null];
+      }
+    }
+
+    function applyHkoFallbackForHk(){
+      if(appState.opsSiteData['HK'] && !isOpsDataStale(appState.opsSiteData['HK'])) return;
+      if(!Array.isArray(appState.stationData) || appState.stationData.length === 0) return;
+      const st = appState.stationData.find(s => s.place.includes('青衣') || s.place.includes('Tsing Yi'))
+              || appState.stationData.find(s => s.place.includes('天文台') || s.place.includes('Hong Kong Observatory'))
+              || appState.stationData[0];
+      const tempVal = parseFloat(st?.value);
+      const humText = document.getElementById('c1CurrentHumidity')?.innerText || '';
+      const humVal = parseFloat(humText);
+      if(Number.isFinite(tempVal)){
+        appState.opsSiteData['HK'] = {
+          temperature: tempVal,
+          humidity: Number.isFinite(humVal) ? humVal : 75,
+          windDir: null,
+          wind: 0,
+          gust: 0,
+          visibilityKm: 10,
+          code: 1,
+          rainProb: 10,
+          thunderstorm: false,
+          hourly: [],
+          maxH: { wind: 0, gust: 0, rainProb: 10, visibilityKm: 10 },
+          updated: Date.now(),
+          isHkoFallback: true
+        };
+      }
+    }
+
     async function fetchAllScnTerminals(){
-      const entries=Object.entries(opsSiteCoords);
-      const results=await Promise.all(entries.map(([code,t])=>fetchOpsSite(code,t)));
-      let ok=0;results.forEach(([code,d])=>{if(d){appState.opsSiteData[code]=d;ok++;}});
-      recordOpsStatusChanges();
-      const selected=appState.opsSiteData[appState.selectedScnTerminal];
-      if(selected){
-        renderSelectedScnTerminal(selected);
-      }
-      /* legacy selected-site display handled above */
-      if(false && selected && appState.selectedOpsSite!=='HK'){
-        const set=(id,v)=>{const e=document.getElementById(id);if(e)e.innerText=v;};set('scnTemp',`${Math.round(selected.temperature||0)}°C`);set('scnWindSpeed',selected.wind?.toFixed(0)||'--');set('scnWindGust',selected.gust?.toFixed(0)||'--');set('scnWindDir',appState.lang==='tc'?`風向：${selected.windDir??'--'}°`:`Dir: ${selected.windDir??'--'}°`);set('scnHumidity',appState.lang==='tc'?`相對濕度：${selected.humidity??'--'}%`:`Humidity: ${selected.humidity??'--'}%`);set('scnDesc',weatherShort(selected.code));const icon=document.getElementById('scnIcon');if(icon)icon.innerHTML=getWmoCodeDetails(selected.code).icon;
-      }
-      const stamp=new Date(),hm=stamp.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});const sync=document.getElementById('opsLastSync');if(sync)sync.textContent=`${hm} HKT`;
-      updateHealth('healthScn',ok===entries.length?'ok':'warn',`${ok}/${entries.length} ${appState.lang==='tc'?'個地點':'sites'}`);renderOpsDashboard();renderOpsAlerts();
+      if(scnFetchInFlight) return scnFetchInFlight;
+      scnFetchInFlight = (async ()=>{
+        const entries = Object.entries(opsSiteCoords);
+        let ok = 0;
+        lastOpenMeteoError = '';
+        try{
+          // 1. Single batched multi-coordinate request (prevents 429 rate limits)
+          let batchResults = [];
+          try{
+            batchResults = await fetchOpsBatch(entries);
+          }catch(firstErr){
+            lastOpenMeteoError = firstErr?.message || 'Batch error';
+            await new Promise(res => setTimeout(res, 900));
+            batchResults = await fetchOpsBatch(entries);
+          }
+          batchResults.forEach(([code, d]) => {
+            if(d){ appState.opsSiteData[code] = d; ok++; }
+          });
+        }catch(batchErr){
+          lastOpenMeteoError = batchErr?.message || lastOpenMeteoError || 'Network error';
+          // 2. Staggered per-site fallback if batch request fails
+          for(const [code, t] of entries){
+            const [, d] = await fetchOpsSite(code, t);
+            if(d){ appState.opsSiteData[code] = d; ok++; }
+            await new Promise(res => setTimeout(res, 180));
+          }
+        }
+
+        if(ok === 0){
+          applyHkoFallbackForHk();
+        }else{
+          saveOpsSiteCache();
+        }
+
+        recordOpsStatusChanges();
+        const selected = appState.opsSiteData[appState.selectedScnTerminal];
+        if(selected){
+          renderSelectedScnTerminal(selected);
+        }
+        const stamp = new Date(), hm = stamp.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});
+        const sync = document.getElementById('opsLastSync');
+        if(sync) sync.textContent = `${hm} HKT`;
+        const healthMsg = ok === entries.length
+          ? `${ok}/${entries.length} ${appState.lang==='tc'?'個地點 (正常)':'sites (Live)'}`
+          : (ok > 0
+            ? `${ok}/${entries.length} ${appState.lang==='tc'?'個地點':'sites'}`
+            : `0/${entries.length} (${lastOpenMeteoError || (appState.lang==='tc'?'連線受阻':'Unavailable')})`);
+        updateHealth('healthScn', ok === entries.length ? 'ok' : 'warn', healthMsg);
+        renderOpsDashboard();
+        renderOpsAlerts();
+      })().finally(()=>{ scnFetchInFlight = null; });
+      return scnFetchInFlight;
     }
     function populateOpsTerminalSelect(){const s=document.getElementById('opsTerminalSelect');if(!s)return;s.innerHTML=Object.keys(hkscnCoords).map(c=>`<option value="${c}" ${c===appState.selectedScnTerminal?'selected':''}>${c} — ${terminalName(c)}</option>`).join('');}
 
@@ -2628,6 +2780,7 @@
     }
 
     window.onload = function () {
+      loadOpsSiteCache();
       loadWarningHistory();
       setupOpsSidebar();
       initOpsMap();
@@ -2635,9 +2788,9 @@
       applyOpsLanguage();
       populateOpsTerminalSelect();
       updateSelectedTideStation();
-      // Only call fetchAllHkoData. It now includes updateSelectedAutoStationForecast.
+      // Single initial fetch + set timer without duplicate burst
       fetchAllHkoData(false);
-      changeRefreshInterval();
+      changeRefreshInterval(false);
       setInterval(drawAnalogClock, 1000);
       setInterval(updateCalendarAndClock, 30000);
       drawAnalogClock();
