@@ -920,7 +920,7 @@
 
           <div class="hko-card-footer">
             <div class="flex gap-3">
-              <button onclick="fetchCurrentWeatherReport(true)"><i class="fas fa-arrows-rotate"></i></button>
+              <button onclick="updateSelectedAutoStationForecast(true)" title="更新自動分區預報"><i class="fas fa-arrows-rotate" id="c2RefreshSpin"></i></button>
               <button onclick="showInfoModal('c2')"><i class="fas fa-circle-info"></i></button>
             </div>
             <a id="c2OfficialLink" href="https://www.hko.gov.hk/tc/wxinfo/awsgis/regional_portal.html" target="_blank" rel="noopener noreferrer">
@@ -1692,107 +1692,342 @@
       }
     }
 
-    // Modified updateSelectedAutoStationForecast to generate 5 horizontal periods
-    function updateSelectedAutoStationForecast() {
-      const select = document.getElementById('autoForecastStationSelect');
-      document.getElementById('c2SubStationLabel').innerText = select.options[select.selectedIndex].text;
-      
-      const container = document.getElementById('c2HourlyList');
-      if(container) {
-          container.classList.remove('data-flash');
-          void container.offsetWidth;
-          container.classList.add('data-flash');
-      }
-      
-      const offset = select.value.length % 5;
-      const baseT = 24 + offset;
-      
-      const today = new Date();
-      
-      // Calculate future 5 periods
-      const startHour = today.getHours();
-      const periods = [];
-      let currentDay = today.getDate();
-      let currentMonth = today.getMonth() + 1;
-      let dayOffset = 0;
-      
-      const weekdaysTc = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
-      
-      for (let i = 1; i <= 5; i++) {
-        let hr = startHour + i * 3;
-        let dayIncrease = Math.floor(hr / 24);
-        hr = hr % 24;
-        
-        let targetDate = new Date(today);
-        targetDate.setDate(today.getDate() + dayIncrease);
-        
-        periods.push({
-          hour: hr + 'H',
-          dateStr: `${String(targetDate.getDate()).padStart(2,'0')}/${String(targetDate.getMonth()+1).padStart(2,'0')}`,
-          weekday: weekdaysTc[targetDate.getDay()],
-          isNewDay: i === 1 || dayIncrease > Math.floor((startHour + (i - 1) * 3) / 24)
-        });
-      }
+    /* 34 HKO Automatic Weather Stations Coordinates & Official Station Name Mapping */
+    const hkAutoStationCoords = {
+      "Tsing Yi": { lat: 22.348, lon: 114.109, hkoNames: ["青衣", "Tsing Yi"] },
+      "Cheung Chau": { lat: 22.201, lon: 114.027, hkoNames: ["長洲", "Cheung Chau"] },
+      "Chek Lap Kok": { lat: 22.309, lon: 113.922, hkoNames: ["赤鱲角", "Chek Lap Kok"] },
+      "Hong Kong Observatory": { lat: 22.302, lon: 114.174, hkoNames: ["天文台", "Hong Kong Observatory"] },
+      "Hong Kong Park": { lat: 22.278, lon: 114.162, hkoNames: ["香港公園", "Hong Kong Park"] },
+      "Wong Chuk Hang": { lat: 22.248, lon: 114.174, hkoNames: ["黃竹坑", "Wong Chuk Hang"] },
+      "Happy Valley": { lat: 22.270, lon: 114.183, hkoNames: ["跑馬地", "Happy Valley"] },
+      "Tseung Kwan O": { lat: 22.316, lon: 114.256, hkoNames: ["將軍澳", "Tseung Kwan O"] },
+      "King's Park": { lat: 22.312, lon: 114.173, hkoNames: ["京士柏", "King's Park"] },
+      "Lok Ma Chau": { lat: 22.514, lon: 114.069, hkoNames: ["落馬洲", "Lok Ma Chau"] },
+      "Kwun Tong": { lat: 22.319, lon: 114.225, hkoNames: ["觀塘", "Kwun Tong"] },
+      "Lau Fau Shan": { lat: 22.469, lon: 113.984, hkoNames: ["流浮山", "Lau Fau Shan"] },
+      "Ngong Ping": { lat: 22.259, lon: 113.913, hkoNames: ["昂坪", "Ngong Ping"] },
+      "Peng Chau": { lat: 22.291, lon: 114.043, hkoNames: ["坪洲", "Peng Chau"] },
+      "Shek Kong": { lat: 22.436, lon: 114.085, hkoNames: ["石崗", "Shek Kong"] },
+      "Sha Tin": { lat: 22.402, lon: 114.210, hkoNames: ["沙田", "Sha Tin"] },
+      "Sai Kung": { lat: 22.376, lon: 114.274, hkoNames: ["西貢", "Sai Kung"] },
+      "Shau Kei Wan": { lat: 22.282, lon: 114.236, hkoNames: ["筲箕灣", "Shau Kei Wan"] },
+      "Sheung Shui": { lat: 22.501, lon: 114.128, hkoNames: ["上水", "Sheung Shui"] },
+      "Sham Shui Po": { lat: 22.336, lon: 114.137, hkoNames: ["深水埗", "Sham Shui Po"] },
+      "Stanley": { lat: 22.214, lon: 114.219, hkoNames: ["赤柱", "Stanley"] },
+      "Tsuen Wan Ho Koon": { lat: 22.384, lon: 114.108, hkoNames: ["荃灣可觀", "Tsuen Wan Ho Koon"] },
+      "Pak Tam Chung": { lat: 22.403, lon: 114.323, hkoNames: ["北潭涌", "Pak Tam Chung"] },
+      "Victoria Peak": { lat: 22.264, lon: 114.155, hkoNames: ["太平山", "山頂", "Victoria Peak"] },
+      "Waglan Island": { lat: 22.182, lon: 114.303, hkoNames: ["橫瀾島", "Waglan Island"] },
+      "Wetland Park": { lat: 22.467, lon: 114.009, hkoNames: ["濕地公園", "Wetland Park"] },
+      "Wong Tai Sin": { lat: 22.339, lon: 114.205, hkoNames: ["黃大仙", "Wong Tai Sin"] },
+      "Tai Po": { lat: 22.446, lon: 114.179, hkoNames: ["大埔", "Tai Po"] },
+      "Tuen Mun": { lat: 22.386, lon: 113.964, hkoNames: ["屯門", "Tuen Mun"] },
+      "Central": { lat: 22.285, lon: 114.158, hkoNames: ["中環", "Central"] },
+      "Ta Kwu Ling": { lat: 22.529, lon: 114.157, hkoNames: ["打鼓嶺", "Ta Kwu Ling"] },
+      "Tai Mo Shan": { lat: 22.411, lon: 114.124, hkoNames: ["大帽山", "Tai Mo Shan"] },
+      "Tap Mun": { lat: 22.471, lon: 114.361, hkoNames: ["塔門", "Tap Mun"] },
+      "Kat O": { lat: 22.553, lon: 114.299, hkoNames: ["吉澳", "Kat O"] }
+    };
 
-      // We will clear the existing hardcoded row structure and rebuild the entire card body
-      const cardBody = document.querySelector('#c2SubStationLabel').nextElementSibling;
-      
-      let html = '';
-      let currentGroupDate = null;
-      
-      periods.forEach((p, index) => {
-        let temp = baseT + (index % 3);
-        let rain = (offset * 10) - (index * 2);
-        if(rain < 0) rain = '< 10';
-        
-        let icon = '<i class="fas fa-moon text-amber-200 text-2xl"></i>';
-        if(parseInt(p.hour) >= 6 && parseInt(p.hour) <= 18) {
-            icon = '<i class="fas fa-sun text-yellow-400 text-2xl"></i>';
-            if(index % 2 === 0) icon = '<i class="fas fa-cloud-sun text-amber-300 text-2xl"></i>';
+    const AUTO_FORECAST_CACHE_KEY = 'weatherAutoForecastCacheV1';
+    const autoForecastMemoryCache = {};
+    const autoForecastInFlight = {};
+
+    function formatWindCompassLabel(deg) {
+      if (!Number.isFinite(deg)) return appState.lang === 'tc' ? '東北 NE' : 'NE';
+      const dirsTc = ['北 N', '東北 NE', '東 E', '東南 SE', '南 S', '西南 SW', '西 W', '西北 NW'];
+      const dirsEn = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
+      return appState.lang === 'tc' ? dirsTc[idx] : dirsEn[idx];
+    }
+
+    function getRegionalForecastIconHtml(code, hourNum) {
+      const isNight = hourNum >= 18 || hourNum < 6;
+      if (code === 0) {
+        return isNight
+          ? '<i class="fas fa-moon text-amber-200 text-2xl"></i>'
+          : '<i class="fas fa-sun text-yellow-400 text-2xl"></i>';
+      }
+      if (code === 1 || code === 2) {
+        return isNight
+          ? '<i class="fas fa-cloud-moon text-amber-200 text-2xl"></i>'
+          : '<i class="fas fa-cloud-sun text-amber-300 text-2xl"></i>';
+      }
+      if (code === 3) {
+        return '<i class="fas fa-cloud text-slate-200 text-2xl"></i>';
+      }
+      if (code === 45 || code === 48) {
+        return '<i class="fas fa-smog text-slate-300 text-2xl"></i>';
+      }
+      if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+        return '<i class="fas fa-cloud-showers-heavy text-sky-300 text-2xl"></i>';
+      }
+      if (code >= 95 && code <= 99) {
+        return '<i class="fas fa-bolt text-amber-400 text-2xl"></i>';
+      }
+      return '<i class="fas fa-cloud text-slate-200 text-2xl"></i>';
+    }
+
+    function getCachedAutoStationData(stationKey) {
+      if (autoForecastMemoryCache[stationKey]) return autoForecastMemoryCache[stationKey];
+      try {
+        const store = JSON.parse(localStorage.getItem(AUTO_FORECAST_CACHE_KEY) || '{}');
+        if (store[stationKey]) {
+          autoForecastMemoryCache[stationKey] = store[stationKey];
+          return store[stationKey];
         }
-        
-        // If it's the start of a new day group in the list
-        if(p.isNewDay || index === 0) {
-            if(index !== 0) html += `</div></div>`; // Close previous group
-            
-            html += `<div class="flex border-b border-[#244880] last:border-0">
+      } catch (e) {}
+      return null;
+    }
+
+    function saveCachedAutoStationData(stationKey, payload) {
+      autoForecastMemoryCache[stationKey] = payload;
+      try {
+        const store = JSON.parse(localStorage.getItem(AUTO_FORECAST_CACHE_KEY) || '{}');
+        store[stationKey] = payload;
+        localStorage.setItem(AUTO_FORECAST_CACHE_KEY, JSON.stringify(store));
+      } catch (e) {}
+    }
+
+    async function fetchAutoStationForecastPayload(stationKey, forceRefresh = false) {
+      const cached = getCachedAutoStationData(stationKey);
+      if (!forceRefresh && cached && (Date.now() - cached.fetchedAt) < 15 * 60 * 1000) {
+        return cached.data;
+      }
+      if (autoForecastInFlight[stationKey]) {
+        return autoForecastInFlight[stationKey];
+      }
+      const st = hkAutoStationCoords[stationKey] || hkAutoStationCoords["Tsing Yi"];
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&wind_speed_unit=kmh&timezone=Asia%2FHong_Kong&forecast_days=3`;
+
+      autoForecastInFlight[stationKey] = (async () => {
+        try {
+          let r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) {
+            await new Promise(res => setTimeout(res, 600));
+            r = await fetch(url, { cache: 'no-store' });
+          }
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const data = await r.json();
+          saveCachedAutoStationData(stationKey, { fetchedAt: Date.now(), data });
+          return data;
+        } catch (err) {
+          console.warn('Auto regional forecast fetch error:', err);
+          return cached ? cached.data : null;
+        } finally {
+          delete autoForecastInFlight[stationKey];
+        }
+      })();
+
+      return autoForecastInFlight[stationKey];
+    }
+
+    function getHkoStationLiveTemp(stationKey) {
+      if (!Array.isArray(appState.stationData) || appState.stationData.length === 0) return null;
+      const st = hkAutoStationCoords[stationKey];
+      if (!st || !Array.isArray(st.hkoNames)) return null;
+      const match = appState.stationData.find(item =>
+        st.hkoNames.some(name => item.place && item.place.includes(name))
+      );
+      const val = parseFloat(match?.value);
+      return Number.isFinite(val) ? val : null;
+    }
+
+    function formatHkIsoDate(dateObj) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(dateObj);
+      const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+      return `${map.year}-${map.month}-${map.day}`;
+    }
+
+    function getHkHourNow(dateObj) {
+      const hrStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Hong_Kong',
+        hour: '2-digit',
+        hour12: false
+      }).format(dateObj);
+      const hr = parseInt(hrStr, 10);
+      return Number.isFinite(hr) ? (hr % 24) : dateObj.getHours();
+    }
+
+    // Fetch real hourly & daily regional weather forecast (Open-Meteo + HKO live station calibration)
+    async function updateSelectedAutoStationForecast(isManual = false) {
+      const select = document.getElementById('autoForecastStationSelect');
+      if (!select) return;
+      const stationKey = select.value;
+      const subLabel = document.getElementById('c2SubStationLabel');
+      if (subLabel) subLabel.innerText = select.options[select.selectedIndex].text;
+
+      const spinIcon = document.getElementById('c2RefreshSpin');
+      if (spinIcon && isManual) spinIcon.classList.add('fa-spin');
+
+      const cardBody = document.querySelector('#c2SubStationLabel')?.nextElementSibling;
+      if (!cardBody) return;
+
+      try {
+        const forecastData = await fetchAutoStationForecastPayload(stationKey, isManual);
+        // Guard against race conditions if user changed dropdown while fetching
+        if (select.value !== stationKey) return;
+
+        const now = new Date();
+        const startHour = getHkHourNow(now);
+        const weekdaysTc = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
+        const weekdaysEn = ['(Sun)', '(Mon)', '(Tue)', '(Wed)', '(Thu)', '(Fri)', '(Sat)'];
+
+        // Calibrate temperature with live HKO rhrread observation for this exact station if available
+        let tempBias = 0;
+        const hkoLiveTemp = getHkoStationLiveTemp(stationKey);
+        if (Number.isFinite(hkoLiveTemp) && forecastData?.current && Number.isFinite(forecastData.current.temperature_2m)) {
+          const rawDiff = hkoLiveTemp - Number(forecastData.current.temperature_2m);
+          tempBias = Math.max(-3.5, Math.min(3.5, rawDiff));
+        }
+
+        const hourlyTimes = forecastData?.hourly?.time || [];
+        const dailyDates = forecastData?.daily?.time || [];
+
+        // Build 5 three-hourly future forecast points (matching 3H interval layout)
+        const periods = [];
+        for (let i = 1; i <= 5; i++) {
+          const totalHr = startHour + i * 3;
+          const dayIncrease = Math.floor(totalHr / 24);
+          const hr = totalHr % 24;
+
+          const targetDate = new Date(now.getTime() + dayIncrease * 86400000);
+          const isoDate = formatHkIsoDate(targetDate);
+          const isoHourStr = `${isoDate}T${String(hr).padStart(2, '0')}:00`;
+          const hkDayOfWeek = new Date(`${isoDate}T12:00:00+08:00`).getDay();
+
+          let hIdx = hourlyTimes.indexOf(isoHourStr);
+          if (hIdx < 0 && hourlyTimes.length > 0) {
+            hIdx = hourlyTimes.findIndex(t => t >= isoHourStr);
+          }
+
+          let tempVal = null;
+          let rhVal = null;
+          let windSpd = null;
+          let windDirStr = formatWindCompassLabel(45);
+          let wmoCode = 3;
+          let popVal = null;
+
+          if (hIdx >= 0 && forecastData?.hourly) {
+            const rawT = Number(forecastData.hourly.temperature_2m?.[hIdx]);
+            if (Number.isFinite(rawT)) tempVal = Math.round(rawT + tempBias);
+            const rawRh = Number(forecastData.hourly.relative_humidity_2m?.[hIdx]);
+            if (Number.isFinite(rawRh)) rhVal = Math.round(rawRh);
+            const rawWind = Number(forecastData.hourly.wind_speed_10m?.[hIdx]);
+            if (Number.isFinite(rawWind)) windSpd = Math.round(rawWind);
+            const rawDir = Number(forecastData.hourly.wind_direction_10m?.[hIdx]);
+            if (Number.isFinite(rawDir)) windDirStr = formatWindCompassLabel(rawDir);
+            const rawCode = Number(forecastData.hourly.weather_code?.[hIdx]);
+            if (Number.isFinite(rawCode)) wmoCode = rawCode;
+            const rawPop = Number(forecastData.hourly.precipitation_probability?.[hIdx]);
+            if (Number.isFinite(rawPop)) popVal = Math.round(rawPop);
+          }
+
+          // Fallback to HKO live reading if Open-Meteo is offline
+          if (!Number.isFinite(tempVal)) {
+            tempVal = Number.isFinite(hkoLiveTemp) ? Math.round(hkoLiveTemp) : 21;
+          }
+          if (!Number.isFinite(rhVal)) {
+            const curHkoRh = parseInt(document.getElementById('c1CurrentHumidity')?.innerText || '', 10);
+            rhVal = Number.isFinite(curHkoRh) ? curHkoRh : 60;
+          }
+          if (!Number.isFinite(windSpd)) windSpd = 10;
+
+          periods.push({
+            hourNum: hr,
+            hour: hr + 'H',
+            isoDate,
+            dateStr: `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}`,
+            weekday: appState.lang === 'tc' ? weekdaysTc[hkDayOfWeek] : weekdaysEn[hkDayOfWeek],
+            temp: tempVal,
+            rh: rhVal,
+            windSpd,
+            windDirStr,
+            wmoCode,
+            popVal
+          });
+        }
+
+        // Compute real daily summary (Rain Probability %, Daily Max ↑, Daily Min ↓) per date group
+        const dayStatsMap = {};
+        periods.forEach(p => {
+          if (!dayStatsMap[p.isoDate]) {
+            const dIdx = dailyDates.indexOf(p.isoDate);
+            let dMax = dIdx >= 0 ? Math.round(Number(forecastData.daily.temperature_2m_max?.[dIdx]) + tempBias) : p.temp;
+            let dMin = dIdx >= 0 ? Math.round(Number(forecastData.daily.temperature_2m_min?.[dIdx]) + tempBias) : p.temp;
+            let dPop = dIdx >= 0 ? Math.round(Number(forecastData.daily.precipitation_probability_max?.[dIdx])) : (p.popVal ?? 20);
+            if (!Number.isFinite(dMax)) dMax = p.temp;
+            if (!Number.isFinite(dMin)) dMin = p.temp;
+            if (!Number.isFinite(dPop)) dPop = 20;
+            dayStatsMap[p.isoDate] = { maxT: dMax, minT: dMin, pop: dPop };
+          }
+          dayStatsMap[p.isoDate].maxT = Math.max(dayStatsMap[p.isoDate].maxT, p.temp);
+          dayStatsMap[p.isoDate].minT = Math.min(dayStatsMap[p.isoDate].minT, p.temp);
+          if (Number.isFinite(p.popVal)) {
+            dayStatsMap[p.isoDate].pop = Math.max(dayStatsMap[p.isoDate].pop, p.popVal);
+          }
+        });
+
+        let htmlOut = '';
+        periods.forEach((p, index) => {
+          const isNewDay = index === 0 || p.isoDate !== periods[index - 1].isoDate;
+          const icon = getRegionalForecastIconHtml(p.wmoCode, p.hourNum);
+
+          if (isNewDay) {
+            if (index !== 0) htmlOut += `</div></div>`;
+            const stats = dayStatsMap[p.isoDate];
+            const rainDisplay = stats.pop < 10 ? '< 10' : stats.pop;
+
+            htmlOut += `<div class="flex border-b border-[#244880] last:border-0">
                 <!-- Left side: Date & min/max -->
                 <div class="w-[85px] shrink-0 border-r border-[#244880] flex flex-col items-center justify-center py-3 bg-[#112445]/50">
-                  <div class="font-bold text-sm">` + p.dateStr + `</div>
-                  <div class="text-xs mb-2">` + p.weekday + `</div>
+                  <div class="font-bold text-sm">${p.dateStr}</div>
+                  <div class="text-xs mb-2">${p.weekday}</div>
                   <div class="text-xs text-sky-300 flex items-center gap-1 mb-2">
-                    <i class="fas fa-umbrella"></i> <span>` + rain + `%</span>
+                    <i class="fas fa-umbrella"></i> <span>${rainDisplay}%</span>
                   </div>
                   <div class="text-xs font-bold text-white flex flex-col items-center gap-1">
-                    <div class="flex items-center gap-1"><i class="fas fa-arrow-up text-amber-400 text-sm"></i> ` + (baseT + 6) + `°C</div>
-                    <div class="flex items-center gap-1"><i class="fas fa-arrow-down text-sky-400 text-sm"></i> ` + baseT + `°C</div>
+                    <div class="flex items-center gap-1"><i class="fas fa-arrow-up text-amber-400 text-sm"></i> ${stats.maxT}°C</div>
+                    <div class="flex items-center gap-1"><i class="fas fa-arrow-down text-sky-400 text-sm"></i> ${stats.minT}°C</div>
                   </div>
                 </div>
                 <!-- Right side: Hourly rows -->
                 <div class="flex-1 flex flex-col">`;
-        }
-        
-        html += `
+          }
+
+          htmlOut += `
                   <div class="flex items-center justify-between py-2.5 px-4 border-b border-[#244880]/50 last:border-0">
-                    <span class="font-mono font-bold text-sm w-8">` + p.hour + `</span>
-                    <div class="w-10 flex justify-center">` + icon + `</div>
+                    <span class="font-mono font-bold text-sm w-8">${p.hour}</span>
+                    <div class="w-10 flex justify-center">${icon}</div>
                     <div class="text-center w-16">
-                      <div class="font-bold text-sm">` + temp + `°C</div>
-                      <div class="text-[11px] text-slate-300">` + (70 - index) + `%</div>
+                      <div class="font-bold text-sm">${p.temp}°C</div>
+                      <div class="text-[11px] text-slate-300">${p.rh}%</div>
                     </div>
-                    <div class="text-right w-12">
-                      <div class="text-xs">東 E</div>
-                      <div class="text-[11px] text-slate-300">` + (3 + index) + `km/h</div>
+                    <div class="text-right w-14">
+                      <div class="text-xs">${p.windDirStr}</div>
+                      <div class="text-[11px] text-slate-300">${p.windSpd}km/h</div>
                     </div>
                   </div>`;
-                  
-        if(index === periods.length - 1) {
-             html += `</div></div>`; // Close the last group
-        }
-      });
 
-      cardBody.innerHTML = html;
-      cardBody.className = "flex flex-col data-flash text-white"; // Apply styles to wrapper
+          if (index === periods.length - 1) {
+            htmlOut += `</div></div>`;
+          }
+        });
+
+        cardBody.innerHTML = htmlOut;
+        cardBody.className = "flex flex-col data-flash text-white";
+        cardBody.classList.remove('data-flash');
+        void cardBody.offsetWidth;
+        cardBody.classList.add('data-flash');
+      } finally {
+        if (spinIcon) setTimeout(() => spinIcon.classList.remove('fa-spin'), 500);
+      }
     }
 
     /* Convert WMO Weather codes to Text and Icons */
@@ -1870,6 +2105,7 @@
             document.getElementById('c1CurrentTemp').innerText = hkoStation.value;
           }
           renderStationList();
+          updateSelectedAutoStationForecast(false);
         }
 
         if (data.humidity && data.humidity.data && data.humidity.data[0]) {
